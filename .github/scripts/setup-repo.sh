@@ -10,6 +10,13 @@ set -euo pipefail
 #   bash .github/scripts/setup-repo.sh
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# 0. 前提チェック
+# ---------------------------------------------------------------------------
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI が必要です: https://cli.github.com/"; exit 1; }
+gh auth status >/dev/null 2>&1 || { echo "❌ gh auth login を先に実行してください"; exit 1; }
+command -v git >/dev/null 2>&1 || { echo "❌ git が必要です"; exit 1; }
+
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 AUTHOR=$(gh api "repos/$REPO" --jq '.owner.login')
 YEAR=$(date +%Y)
@@ -26,18 +33,20 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "📝 Replacing placeholders..."
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  SED_CMD="sed -i ''"
-else
-  SED_CMD="sed -i"
-fi
+replace_in_file() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "$1" "$2"
+  else
+    sed -i "$1" "$2"
+  fi
+}
 
 # LICENSE
-$SED_CMD "s/{{YEAR}}/$YEAR/g" LICENSE
-$SED_CMD "s/{{AUTHOR}}/$AUTHOR/g" LICENSE
+replace_in_file "s/{{YEAR}}/$YEAR/g" LICENSE
+replace_in_file "s/{{AUTHOR}}/$AUTHOR/g" LICENSE
 
 # SECURITY.md
-$SED_CMD "s|{{REPO}}|$REPO|g" SECURITY.md
+replace_in_file "s|{{REPO}}|$REPO|g" SECURITY.md
 
 echo "  LICENSE: {{YEAR}} → $YEAR, {{AUTHOR}} → $AUTHOR"
 echo "  SECURITY.md: {{REPO}} → $REPO"
@@ -67,9 +76,11 @@ echo "  Auto-merge: ON"
 echo ""
 echo "🔒 Enabling Dependabot alerts..."
 
-gh api -X PUT "repos/$REPO/vulnerability-alerts" 2>/dev/null || true
-
-echo "  Dependabot alerts: ON"
+if gh api -X PUT "repos/$REPO/vulnerability-alerts" 2>/dev/null; then
+  echo "  Dependabot alerts: ON"
+else
+  echo "  ⚠️  Dependabot alerts の設定に失敗しました"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Actions permissions
@@ -77,16 +88,18 @@ echo "  Dependabot alerts: ON"
 echo ""
 echo "🔐 Configuring Actions permissions..."
 
-gh api -X PUT "repos/$REPO/actions/permissions/workflow" \
-  --input - <<'PERMS' 2>/dev/null || true
+if gh api -X PUT "repos/$REPO/actions/permissions/workflow" \
+  --input - <<'PERMS' 2>/dev/null; then
 {
   "default_workflow_permissions": "read",
   "can_approve_pull_request_reviews": true
 }
 PERMS
-
-echo "  Workflow permissions: Read only"
-echo "  PR approval by Actions: Allowed"
+  echo "  Workflow permissions: Read only"
+  echo "  PR approval by Actions: Allowed"
+else
+  echo "  ⚠️  Actions permissions の設定に失敗しました"
+fi
 
 # ---------------------------------------------------------------------------
 # 5. Branch protection (main)
@@ -94,8 +107,8 @@ echo "  PR approval by Actions: Allowed"
 echo ""
 echo "🛡️  Setting up branch protection for main..."
 
-gh api -X PUT "repos/$REPO/branches/main/protection" \
-  --input - <<'PROTECTION' 2>/dev/null || true
+if gh api -X PUT "repos/$REPO/branches/main/protection" \
+  --input - <<'PROTECTION' 2>/dev/null; then
 {
   "required_pull_request_reviews": {
     "required_approving_review_count": 0
@@ -107,11 +120,13 @@ gh api -X PUT "repos/$REPO/branches/main/protection" \
   "allow_deletions": false
 }
 PROTECTION
-
-echo "  PR required: ON (0 approvals, self-merge OK)"
-echo "  Admin bypass: ON"
-echo "  Force push: BLOCKED"
-echo "  Branch deletion: BLOCKED"
+  echo "  PR required: ON (0 approvals, self-merge OK)"
+  echo "  Admin bypass: ON"
+  echo "  Force push: BLOCKED"
+  echo "  Branch deletion: BLOCKED"
+else
+  echo "  ⚠️  Branch protection の設定に失敗しました（Free プランのプライベートリポジトリでは利用不可）"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. コミット & 完了
