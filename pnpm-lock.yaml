@@ -1,0 +1,24 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@rymetry/agent-autonomy':
+        specifier: https://github.com/rymetry/verdict.git#path:/packages/autonomy
+        version: https://codeload.github.com/rymetry/verdict/tar.gz/a14451fb99fc99859af4b0bb8c955341c67ba831#path:/packages/autonomy
+
+packages:
+
+  '@rymetry/agent-autonomy@https://codeload.github.com/rymetry/verdict/tar.gz/a14451fb99fc99859af4b0bb8c955341c67ba831#path:/packages/autonomy':
+    resolution: {path: /packages/autonomy, tarball: https://codeload.github.com/rymetry/verdict/tar.gz/a14451fb99fc99859af4b0bb8c955341c67ba831}
+    version: 0.1.0
+    hasBin: true
+
+snapshots:
+
+  '@rymetry/agent-autonomy@https://codeload.github.com/rymetry/verdict/tar.gz/a14451fb99fc99859af4b0bb8c955341c67ba831#path:/packages/autonomy': {}

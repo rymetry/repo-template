@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-if [ -f package.json ]; then
+if [ "${AGENTS_HOOK_RUN_TYPECHECK:-0}" = "1" ] && [ -f package.json ]; then
   if [ -f pnpm-lock.yaml ] && command -v pnpm >/dev/null 2>&1; then
     pnpm --silent typecheck >/dev/null 2>&1 || true
   elif [ -f package-lock.json ] && command -v npm >/dev/null 2>&1; then
