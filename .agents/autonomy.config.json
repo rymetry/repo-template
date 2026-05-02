@@ -2,7 +2,8 @@
   "version": 1,
   "workflow": {
     "preset": "default",
-    "stages": ["think", "plan", "build", "qa-only", "review", "ship", "learn"]
+    "stages": ["think", "plan", "build", "qa-only", "review", "ship", "learn"],
+    "includeDesignReview": false
   },
   "adapters": {
     "taskSource": "markdown-roadmap",
@@ -14,6 +15,13 @@
   "taskSources": {
     "markdownRoadmap": {
       "paths": ["ROADMAP.md", "docs/ROADMAP.md", "docs/roadmap.md", "TODO.md"]
+    }
+  },
+  "reviewers": {
+    "customCommand": {
+      "command": ["node", "packages/autonomy/dist/review-cli.js", "--pr", "{prNumber}"],
+      "expectedReviewers": ["diff-review"],
+      "timeoutMs": 60000
     }
   },
   "safety": {
