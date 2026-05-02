@@ -33,7 +33,7 @@ bash .github/scripts/setup-repo.sh
 ### 3. AI agent 基盤を確認する
 
 このテンプレートには Codex / Claude Code で共通利用できる最小の自律開発設定と、
-汎用 autonomy engine の npm package 導線を含めています。
+汎用 autonomy engine 本体を含めています。
 
 | 設定 | 内容 |
 |------|------|
@@ -43,23 +43,25 @@ bash .github/scripts/setup-repo.sh
 | **.agents/skills/** | 自律 driver / review の skill template |
 | **.codex/** | Codex hooks と config |
 | **.claude/** | Claude Code hook 設定 |
-| **package.json** | `@rymetry/agent-autonomy` の script wiring |
+| **packages/autonomy/** | 汎用 autonomy lifecycle engine |
+| **package.json** | workspace 内 engine の script wiring |
 | **ROADMAP.md** | default `markdown-roadmap` task source の初期 task |
 
-engine を使う場合は package を install して dry-run から始めます。現時点では pnpm の
-Git subdirectory dependency として `@rymetry/agent-autonomy` を GitHub の `verdict`
-repository から取得します。
-将来 npm package として公開したら、`package.json` の dependency を公開版へ切り替えます。
+engine を使う場合は package を install して dry-run から始めます。
+`packages/autonomy` はテンプレート内に vendored されているため、別 repository に依存せず
+初期 smoke ができます。将来 npm package として公開したら、`package.json` の wiring を
+公開版へ切り替えられます。
 
 ```bash
 pnpm install
-pnpm agents:drive:dry-run
+pnpm agents:drive -- --dry-run
 ```
 
 利用できる script:
 
 - `pnpm agents:drive -- --dry-run`
-- `pnpm agents:drive:dry-run`
+- `pnpm agents:typecheck`
+- `pnpm agents:test`
 - `pnpm agents:progress -- seed-completed --ids ROADMAP-1`
 - `pnpm agents:init -- --target <path>`
 
@@ -98,6 +100,9 @@ agent-autonomy-progress seed-completed --ids ROADMAP-1,ROADMAP-2
 AGENTS.md                              # AI agent 共通 context
 ROADMAP.md                             # default task source
 package.json                           # autonomy engine scripts
+packages/autonomy/                     # 汎用 autonomy lifecycle engine
+pnpm-workspace.yaml                    # pnpm workspace
+tsconfig.base.json                     # shared TypeScript config
 LICENSE                                # MIT License（英語 + 日本語）
 CODE_OF_CONDUCT.md                     # Contributor Covenant（日本語）
 SECURITY.md                            # 脆弱性報告ポリシー

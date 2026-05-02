@@ -2,13 +2,17 @@
   "name": "repo-template",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.8.0",
   "scripts": {
-    "agents:drive": "agent-autonomy-drive",
-    "agents:drive:dry-run": "agent-autonomy-drive --dry-run",
-    "agents:init": "agent-autonomy-init",
-    "agents:progress": "agent-autonomy-progress"
+    "agents:drive": "pnpm --filter @rymetry/agent-autonomy run drive --",
+    "agents:init": "pnpm --filter @rymetry/agent-autonomy run init --",
+    "agents:progress": "pnpm --filter @rymetry/agent-autonomy run progress --",
+    "agents:typecheck": "pnpm --filter @rymetry/agent-autonomy typecheck",
+    "agents:test": "pnpm --filter @rymetry/agent-autonomy test"
   },
   "devDependencies": {
-    "@rymetry/agent-autonomy": "https://github.com/rymetry/verdict.git#path:/packages/autonomy"
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   }
 }
