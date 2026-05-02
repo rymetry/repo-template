@@ -1,0 +1,14 @@
+{
+  "name": "repo-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "agents:drive": "agent-autonomy-drive",
+    "agents:drive:dry-run": "agent-autonomy-drive --dry-run",
+    "agents:init": "agent-autonomy-init",
+    "agents:progress": "agent-autonomy-progress"
+  },
+  "devDependencies": {
+    "@rymetry/agent-autonomy": "https://github.com/rymetry/verdict.git#path:/packages/autonomy"
+  }
+}
