@@ -1,54 +1,18 @@
-# Agent Autonomy Context
+# Agent Context
 
-This repository uses the generic autonomy lifecycle:
+<!-- プロジェクト概要をここに記載してください。 -->
 
-```text
-Think -> Plan -> Build -> QA -> Review -> Ship -> optional Deploy/Monitor -> Learn
-```
+## コマンド
 
-Read `.agents/autonomy.config.json` first. Project-specific rules live under
-`.agents/rules/`, reusable workflows live under `.agents/skills/`, and runtime
-state lives under `.agents/state/` and must not be committed.
+<!-- プロジェクトで使うコマンドを記載してください。例:
+- Build: `...`
+- Test: `...`
+- Lint: `...`
+-->
 
-The default `markdown-roadmap` task source reads unchecked Markdown tasks from
-`ROADMAP.md`, `docs/ROADMAP.md`, `docs/roadmap.md`, or `TODO.md`:
+## ルール
 
-```markdown
-- [ ] ROADMAP-1: Describe the next deliverable
-```
-
-This template ships the configuration, hooks, rules, skill layer, and package
-script wiring for `@rymetry/agent-autonomy`. Install dependencies before running
-the lifecycle:
-
-```bash
-pnpm install
-pnpm agents:drive:dry-run
-```
-
-Expose or keep these commands before running the lifecycle:
-
-- `agent-autonomy-drive` or an equivalent `agents:drive` script
-- `agent-autonomy-progress` or an equivalent `agents:progress` script
-
-The bundled edit hook does not execute package scripts unless
-`AGENTS_HOOK_RUN_TYPECHECK=1` is set for that repository.
-
-When adopting the foundation in an existing repository, seed the local completed
-baseline before the first driver run:
-
-```bash
-agent-autonomy-progress seed-completed --ids <task-id[,task-id...]>
-```
-
-Only seed ids that have already landed in the repository's accepted baseline.
-The driver treats `.agents/state/progress.json` as operator-provided local state
-and will not infer completion from branch history.
-
-Default safety gates:
-
-- Do not merge unless CI, QA, scope, and AI review gates pass.
-- Stop before high-risk changes unless the repo config explicitly allows them.
-- Stop on repeated failures, tool authentication failures, network failures, or
-  canary failures.
-- Never commit secrets or per-machine state.
+- Secrets やローカル環境固有の状態をコミットしない。
+- `main` へ直接 push しない。変更は PR 経由で反映する。
+- `main` への force push は禁止(`.claude/hooks/pre-tool-use-policy.sh` でブロックされる)。
+- コンフリクトマーカーを残したまま作業を終えない(`.claude/hooks/stop-verify.sh` で検出される)。

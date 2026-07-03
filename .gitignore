@@ -14,9 +14,6 @@ out/
 .env.local
 .env.*.local
 
-# Agent runtime state
-.agents/state/
-
 # IDE
 .vscode/
 .idea/
