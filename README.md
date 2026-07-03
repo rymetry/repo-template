@@ -30,56 +30,20 @@ bash .github/scripts/setup-repo.sh
 | **不要機能** | Projects / Discussions / Wiki を OFF |
 | **ブランチ自動削除** | マージ後に自動削除 |
 
-### 3. AI agent 基盤を確認する
+### 3. README と AGENTS.md を書き換える
 
-このテンプレートには Codex / Claude Code で共通利用できる最小の自律開発設定と、
-汎用 autonomy engine 本体を含めています。
-
-| 設定 | 内容 |
-|------|------|
-| **AGENTS.md** | AI coding agent 向けの共通 entrypoint |
-| **.agents/autonomy.config.json** | Think → Plan → Build → QA → Review → Ship → Learn の lifecycle 設定 |
-| **.agents/rules/** | safety / release gate の初期 rule pack |
-| **.agents/skills/** | 自律 driver / review の skill template |
-| **.codex/** | Codex hooks と config |
-| **.claude/** | Claude Code hook 設定 |
-| **packages/autonomy/** | 汎用 autonomy lifecycle engine |
-| **package.json** | workspace 内 engine の script wiring |
-| **ROADMAP.md** | default `markdown-roadmap` task source の初期 task |
-
-engine を使う場合は package を install して dry-run から始めます。
-`packages/autonomy` はテンプレート内に vendored されているため、別 repository に依存せず
-初期 smoke ができます。将来 npm package として公開したら、`package.json` の wiring を
-公開版へ切り替えられます。
-
-```bash
-pnpm install
-pnpm agents:drive -- --dry-run
-```
-
-利用できる script:
-
-- `pnpm agents:drive -- --dry-run`
-- `pnpm agents:typecheck`
-- `pnpm agents:test`
-- `pnpm agents:progress -- seed-completed --ids ROADMAP-1`
-- `pnpm agents:init -- --target <path>`
-
-既存リポジトリに導入する場合は、初回 driver 実行前に完了済み task baseline を明示してください。
-
-```bash
-agent-autonomy-progress seed-completed --ids ROADMAP-1,ROADMAP-2
-```
-
-`.agents/state/` はローカル実行状態です。`.gitignore` に含まれており、コミットしません。
-
-### 4. README を書き換える
-
-このファイルをプロジェクト固有の内容に置き換えてください。
+- このファイルをプロジェクト固有の内容に置き換えてください。
+- `AGENTS.md` にプロジェクト概要とコマンドを記載してください。`CLAUDE.md` は
+  `AGENTS.md` へのシンボリックリンクなので、Claude Code からも同じ内容が読まれます。
 
 ## 含まれるファイル
 
 ```
+.claude/
+  settings.json                        # Claude Code hook 設定
+  hooks/
+    pre-tool-use-policy.sh             # main への force push をブロック
+    stop-verify.sh                     # コンフリクトマーカー検出
 .github/
   workflows/dependabot-auto-merge.yml  # Dependabot patch/minor 自動マージ
   ISSUE_TEMPLATE/
@@ -88,23 +52,10 @@ agent-autonomy-progress seed-completed --ids ROADMAP-1,ROADMAP-2
     config.yml                         # blank issue 許可
   PULL_REQUEST_TEMPLATE.md             # PR テンプレート
   scripts/setup-repo.sh                # GitHub 設定自動化スクリプト
-.agents/
-  autonomy.config.json                 # 汎用 autonomy lifecycle 設定
-  rules/                               # safety / release gate rules
-  skills/                              # agent skill templates
-.codex/
-  config.toml                          # Codex hook 設定
-  hooks/                               # Codex / Claude 共通 hooks
-.claude/
-  settings.json                        # Claude Code hook 設定
-AGENTS.md                              # AI agent 共通 context
-ROADMAP.md                             # default task source
-package.json                           # autonomy engine scripts
-packages/autonomy/                     # 汎用 autonomy lifecycle engine
-pnpm-workspace.yaml                    # pnpm workspace
-tsconfig.base.json                     # shared TypeScript config
-LICENSE                                # MIT License（英語 + 日本語）
-CODE_OF_CONDUCT.md                     # Contributor Covenant（日本語）
+AGENTS.md                              # AI agent 共通 context(プレースホルダー)
+CLAUDE.md                              # AGENTS.md へのシンボリックリンク
+LICENSE                                # MIT License(英語 + 日本語)
+CODE_OF_CONDUCT.md                     # Contributor Covenant(日本語)
 SECURITY.md                            # 脆弱性報告ポリシー
 CONTRIBUTING.md                        # コントリビューションガイド
 .gitignore                             # 基本的な除外ルール
