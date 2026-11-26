@@ -4,17 +4,21 @@ set -uo pipefail
 
 command -v jq >/dev/null || { echo "Blocked: hook の実行に jq が必要です。" >&2; exit 2; }
 
+input="$(cat)"
+
 # cwd などコマンド以外の項目に含まれる文字列で誤判定しないよう、実行するコマンドだけを見る。
+# 引数の配列で渡されたコマンドは 1 行につなぐ。
 # 行継続(バックスラッシュと改行)は、分かれた引数を 1 つのコマンドとして読むためにつなぐ。
-command_line="$(jq -r '.tool_input.command // empty | gsub("\\\\\n"; " ")' 2>/dev/null)" ||
+command_line="$(jq -r '[.tool_input.command // empty] | flatten | join(" ") | gsub("\\\\\n"; " ")' <<<"$input" 2>/dev/null)" ||
   { echo "Blocked: hook の入力を JSON として読めません。" >&2; exit 2; }
 
-# 宛先を書かない push は現在のブランチへ向かう。
-current_branch="$(git symbolic-ref --short -q HEAD 2>/dev/null)"
+# 宛先を書かない push は現在のブランチへ向かう。hook を起動した場所ではなく、コマンドを実行する場所で調べる。
+# 短縮した参照名は、同じ名前のタグがあると heads/main になり main と一致しない。
+current_branch="$(git -C "$(jq -r '.cwd // "."' <<<"$input")" branch --show-current 2>/dev/null)"
 
 # 単純コマンド 1 つ分の単語を受け取り、main への force push なら 0 を返す。
 is_force_push_to_main() {
-  local state=start force=0 targets_main=0 positionals=0 word destination
+  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination
   for word in "$@"; do
     case "$state" in
       start)
@@ -22,7 +26,7 @@ is_force_push_to_main() {
         ;;
       git)
         case "$word" in
-          -C|-c|--git-dir|--work-tree|--namespace) state=git_option_value ;;
+          -C|-c|--git-dir|--work-tree|--namespace|--config-env|--attr-source) state=git_option_value ;;
           -*) ;;
           push) state=push ;;
           # コミットメッセージなど、push 以外のサブコマンドの引数は判定しない。
@@ -32,13 +36,17 @@ is_force_push_to_main() {
       git_option_value) state=git ;;
       push_option_value) state=push ;;
       push)
+        # git push は長いオプションの省略形(--force-w など)も受け付けるので、一意に決まる前方一致で比べる。
         case "$word" in
-          # git は長いオプションの省略形(--force-w など)も受け付ける。
           --force*|-f*|-[!-]*f*) force=1 ;;
           # すべてのブランチを送るので、main も宛先に含まれる。--mirror は force なしでも上書きする。
           --al*|--b*) targets_main=1 ;;
           --m*) force=1; targets_main=1 ;;
-          -o|--push-option|--repo|--receive-pack|--exec) state=push_option_value ;;
+          # タグだけを送り、現在のブランチは送らない。
+          --ta*) tags_only=1 ;;
+          # 値を = でつないだオプションの次の単語は、値ではない。
+          --*=*) ;;
+          -o|--pu*|--rep*|--rece*|--e*) state=push_option_value ;;
           -*) ;;
           *)
             positionals=$((positionals + 1))
@@ -46,8 +54,10 @@ is_force_push_to_main() {
             [ "$positionals" -gt 1 ] || continue
             case "$word" in +*) force=1; word="${word#+}" ;; esac
             destination="${word##*:}"
-            case "$destination" in HEAD|@) destination="$current_branch" ;; esac
-            case "$destination" in main|heads/main|refs/heads/main) targets_main=1 ;; esac
+            # 変数やコマンド置換の宛先は中身を追えないので、現在のブランチを指すものとして扱う。
+            case "$destination" in HEAD|@|*\$*) destination="$current_branch" ;; esac
+            # 宛先が空(:)やワイルドカードの refspec は、リモートにあるブランチをまとめて送る。
+            case "$destination" in ""|*\**|main|heads/main|refs/heads/main) targets_main=1 ;; esac
             ;;
         esac
         ;;
@@ -55,13 +65,14 @@ is_force_push_to_main() {
   done
 
   [ "$force" = 1 ] || return 1
-  [ "$targets_main" = 1 ] || { [ "$positionals" -le 1 ] && [ "$current_branch" = main ]; }
+  [ "$targets_main" = 1 ] ||
+    { [ "$positionals" -le 1 ] && [ "$tags_only" = 0 ] && [ "$current_branch" = main ]; }
 }
 
 # 単語に分けるときに * などがファイル名へ展開されないようにする。
 set -f
 
-# shortcut: 引用符を外し、区切り記号と空白で分けるだけで、変数・エイリアス・cd や -C の移動先は追わない。
+# shortcut: 引用符を外し、区切り記号と空白で分けるだけで、変数の値・エイリアス・cd や -C の移動先は追わない。
 # 引用した文字列の中に区切り記号と同じ文言があれば、それも止める。
 # これらが問題になったら、シェルの構文解析に置き換える。
 while IFS= read -r simple_command; do
@@ -71,9 +82,12 @@ while IFS= read -r simple_command; do
     exit 2
   fi
 done < <(
+  # コマンド置換は、中身を別のコマンドとして後ろへ移し、元の位置に $ を残す。その場で区切ると、後ろの引数を見失う。
   # リダイレクトは引数の間にも書けるので、refspec に数えないよう区切る前に取り除く。
   printf '%s\n' "$command_line" | tr -d "\"'" |
-    sed -E 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' | tr ';&|()`' '\n'
+    sed -E -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
+      -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
+    tr ';&|()`' '\n'
 )
 
 exit 0

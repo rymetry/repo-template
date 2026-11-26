@@ -15,11 +15,13 @@ expect() {
   fi
 }
 
-repository="$(mktemp -d)"
-trap 'rm -rf "$repository"' EXIT
-git -C "$repository" init -q
+# パスに main を含む場所(domain)でも判定が変わらないことを、すべてのケースで確かめる。
+sandbox="$(mktemp -d)"
+trap 'rm -rf "$sandbox"' EXIT
+repository="$sandbox/domain"
+git init -q "$repository"
 
-# 判定は現在のブランチにも依存するため、ブランチを決めたリポジトリの中で hook を動かす。
+# 判定は現在のブランチにも依存するため、ブランチを決めたリポジトリを対象にする。
 on_branch() {
   branch="$1"
   git -C "$repository" symbolic-ref HEAD "refs/heads/$branch"
@@ -32,12 +34,14 @@ result_of() {
   echo "$? $reason"
 }
 
+# hook を起動した場所ではなく入力の cwd で判定することを確かめるため、リポジトリへ移動せずに動かす。
 run_policy() {
-  jq -cn --arg command "$1" --arg cwd "${2:-$repository}" \
+  jq -cn --arg command "$1" --arg cwd "$repository" \
     '{cwd: $cwd, tool_name: "Bash", tool_input: {command: $command}}' |
-    (cd "$repository" && bash "$hooks_dir/pre-tool-use-policy.sh")
+    bash "$hooks_dir/pre-tool-use-policy.sh"
 }
 
+# こちらの入力には cwd がないので、hook を起動した場所で判定する。
 run_json_decision() {
   jq -cn --arg command "$1" --arg message "${2:-}" \
     '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
@@ -82,9 +86,21 @@ expect_both deny 'git push origin +feature:refs/heads/main'
 expect_both deny 'git fetch; git push -f origin main'
 expect_both deny $'git push \\\n  -f origin main'
 expect_both deny 'git -C app push -f origin "main" 2>&1 | tail -3'
-expect_both deny 'git --git-dir .git push -f origin main'
+for option in -C -c --git-dir --work-tree --namespace --config-env --attr-source; do
+  expect_both deny "git $option value push -f origin main"
+done
+expect_both deny '/usr/bin/git push -f origin main'
 expect_both deny 'git push -f 2>&1 origin main'
 expect_both deny 'git push -f origin feature:heads/main'
+expect_both deny 'git push origin +:'
+expect_both deny 'git push -f origin :'
+expect_both deny 'git push origin +refs/heads/*:refs/heads/*'
+expect_both deny 'git push -f "$(git remote)" main'
+expect_both deny 'git push -f `git remote` main'
+expect_both deny 'echo "$(git push -f origin main)"'
+expect_both allow 'git push --force-with-lease origin "$(git branch --show-current)"'
+expect_both allow 'git push -f origin "$BRANCH"'
+expect_both allow 'git push origin :'
 expect_both allow 'git push -f origin feature > main'
 expect_both allow 'git push origin main'
 expect_both allow 'git push --follow-tags origin main'
@@ -96,20 +112,39 @@ expect_both allow 'git push -f origin main:feature'
 expect_both allow 'git push -f main feature'
 expect_both allow 'echo main && git push -f origin feature'
 expect_both allow 'git commit -m "git push -f origin main"'
-expect 'policy ignores main in the working directory path' "$allowed" \
-  "$(result_of run_policy 'git push --force origin feature' /work/domain/repository)"
 
 on_branch main
 expect_both deny 'git push -f'
 expect_both deny 'git push --force origin'
 expect_both deny 'git push -f origin HEAD'
+expect_both deny 'git push -f origin @'
+expect_both deny 'git push --force-with-lease origin "$(git branch --show-current)"'
+expect_both deny 'git push -f origin "$BRANCH"'
 expect_both deny 'git push -f origin 2>&1'
 expect_both deny 'git push -f origin > push.log'
 expect_both deny 'git push -f && echo done'
-expect_both deny 'git push -f -o ci.skip origin'
+for option in -o --push-option --pu --repo --rep --receive-pack --rece --exec --e; do
+  expect_both deny "git push -f $option value origin"
+done
+expect_both deny 'git push -f --follow-tags'
+expect_both deny 'git push -f origin main --tags'
+expect_both allow 'git push -f origin --tags'
+expect_both allow 'git push -f --ta'
+expect_both allow 'git push -f --push-option=ci.skip origin feature'
 expect_both allow 'git push'
 expect_both allow 'git push origin HEAD'
 expect_both allow 'git push -f origin feature'
+
+# 同じ名前のタグがあると、短縮した参照名は heads/main になる。
+git -C "$repository" -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m initial
+git -C "$repository" tag main
+expect_both deny 'git push --force'
+
+expect 'policy joins a command given as an array' "2 $blocked_reason" \
+  "$(jq -cn '{tool_input: {command: ["git", "push", "-f", "origin", "main"]}}' |
+    result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'policy allows an ordinary command given as an array' "$allowed" \
+  "$(jq -cn '{tool_input: {command: ["ls", "-la"]}}' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 
 expect 'policy blocks when jq is missing' '2 Blocked: hook の実行に jq が必要です。' \
   "$(printf '{}' | result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
