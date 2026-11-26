@@ -41,11 +41,11 @@ run_policy() {
     bash "$hooks_dir/pre-tool-use-policy.sh"
 }
 
-# こちらの入力には cwd がないので、hook を起動した場所で判定する。
+# こちらも入力の Cwd で判定することを確かめるため、リポジトリへ移動せずに動かす。
 run_json_decision() {
-  jq -cn --arg command "$1" --arg message "${2:-}" \
-    '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
-    (cd "$repository" && bash "$hooks_dir/pre-tool-use-json-decision.sh")
+  jq -cn --arg command "$1" --arg message "${2:-}" --arg cwd "$repository" \
+    '{toolCall: {args: {CommandLine: $command, Cwd: $cwd}}, lastUserInput: $message}' |
+    bash "$hooks_dir/pre-tool-use-json-decision.sh"
 }
 
 json_decision() {
@@ -95,6 +95,15 @@ expect_both deny 'git push -f origin feature:heads/main'
 expect_both deny 'git push origin +:'
 expect_both deny 'git push -f origin :'
 expect_both deny 'git push origin +refs/heads/*:refs/heads/*'
+expect_both deny 'git push -f origin "+refs/*:refs/*"'
+expect_both deny 'git push -f origin "*:*"'
+expect_both deny 'git push -f origin "refs/heads/*:heads/*"'
+expect_both allow 'git push -f origin "refs/tags/*:refs/tags/*"'
+expect_both allow 'git push -f origin feature:'
+expect_both allow 'git push -f origin HEAD:'
+expect_both deny 'git push -f origin main:'
+expect_both deny 'git push -f origin "${SOURCE:-feature}:main"'
+expect_both deny 'git push -f "$(git remote)" "$(echo x)" main'
 expect_both deny 'git push -f "$(git remote)" main'
 expect_both deny 'git push -f `git remote` main'
 expect_both deny 'echo "$(git push -f origin main)"'
@@ -121,6 +130,8 @@ expect_both deny 'git push -f origin HEAD'
 expect_both deny 'git push -f origin @'
 expect_both deny 'git push --force-with-lease origin "$(git branch --show-current)"'
 expect_both deny 'git push -f origin "$BRANCH"'
+expect_both deny 'git push -f origin "${BRANCH:-main}"'
+expect_both deny 'git push -fo ci.skip origin'
 expect_both deny 'git push -f origin 2>&1'
 expect_both deny 'git push -f origin > push.log'
 expect_both deny 'git push -f && echo done'
@@ -137,9 +148,20 @@ expect_both allow 'git push origin HEAD'
 expect_both allow 'git push -f origin feature'
 
 # 同じ名前のタグがあると、短縮した参照名は heads/main になる。
-git -C "$repository" -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m initial
-git -C "$repository" tag main
+# 署名や commit hook などの個人設定で準備が失敗しないようにし、タグができたことも確かめる。
+git -C "$repository" -c user.name=test -c user.email=test@example.com -c commit.gpgsign=false \
+  -c core.hooksPath=/dev/null commit -q --allow-empty -m initial
+git -C "$repository" -c tag.gpgSign=false tag main
+expect 'a tag named main exists' yes \
+  "$(git -C "$repository" rev-parse -q --verify refs/tags/main >/dev/null && echo yes || echo no)"
 expect_both deny 'git push --force'
+
+# ブランチが分からないときは main とみなす。
+git -C "$repository" checkout -q --detach
+branch=detached
+expect_both deny 'git push -f'
+expect_both deny 'git push -f origin "$BRANCH"'
+expect_both allow 'git push -f origin HEAD:refs/heads/feature'
 
 expect 'policy joins a command given as an array' "2 $blocked_reason" \
   "$(jq -cn '{tool_input: {command: ["git", "push", "-f", "origin", "main"]}}' |

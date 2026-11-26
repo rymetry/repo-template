@@ -15,10 +15,12 @@ command_line="$(jq -r '[.tool_input.command // empty] | flatten | join(" ") | gs
 # 宛先を書かない push は現在のブランチへ向かう。hook を起動した場所ではなく、コマンドを実行する場所で調べる。
 # 短縮した参照名は、同じ名前のタグがあると heads/main になり main と一致しない。
 current_branch="$(git -C "$(jq -r '.cwd // "."' <<<"$input")" branch --show-current 2>/dev/null)"
+# ブランチが分からないとき(detached HEAD、古い git など)は、見逃さないよう main とみなす。
+current_branch="${current_branch:-main}"
 
 # 単純コマンド 1 つ分の単語を受け取り、main への force push なら 0 を返す。
 is_force_push_to_main() {
-  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination
+  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix
   for word in "$@"; do
     case "$state" in
       start)
@@ -38,6 +40,8 @@ is_force_push_to_main() {
       push)
         # git push は長いオプションの省略形(--force-w など)も受け付けるので、一意に決まる前方一致で比べる。
         case "$word" in
+          # -o の値は次の単語。-fo のようにまとめて書いても同じ。
+          -o|-[!-]*o) case "$word" in *f*) force=1 ;; esac; state=push_option_value ;;
           --force*|-f*|-[!-]*f*) force=1 ;;
           # すべてのブランチを送るので、main も宛先に含まれる。--mirror は force なしでも上書きする。
           --al*|--b*) targets_main=1 ;;
@@ -46,18 +50,30 @@ is_force_push_to_main() {
           --ta*) tags_only=1 ;;
           # 値を = でつないだオプションの次の単語は、値ではない。
           --*=*) ;;
-          -o|--pu*|--rep*|--rece*|--e*) state=push_option_value ;;
+          --pu*|--rep*|--rece*|--e*) state=push_option_value ;;
           -*) ;;
           *)
             positionals=$((positionals + 1))
             # 最初の位置引数はリモートで、refspec はその後に続く。
             [ "$positionals" -gt 1 ] || continue
             case "$word" in +*) force=1; word="${word#+}" ;; esac
-            destination="${word##*:}"
+            case "$word" in
+              # : だけの refspec は、リモートにある同じ名前のブランチをまとめて送る。
+              :) destination='*' ;;
+              # 宛先を空にした <src>: は、src と同じ名前へ送る。
+              *:) destination="${word%:}" ;;
+              *) destination="${word##*:}" ;;
+            esac
             # 変数やコマンド置換の宛先は中身を追えないので、現在のブランチを指すものとして扱う。
             case "$destination" in HEAD|@|*\$*) destination="$current_branch" ;; esac
-            # 宛先が空(:)やワイルドカードの refspec は、リモートにあるブランチをまとめて送る。
-            case "$destination" in ""|*\**|main|heads/main|refs/heads/main) targets_main=1 ;; esac
+            case "$destination" in
+              # ワイルドカードは、* より前の部分が main の参照名の先頭と一致すれば main も含む。
+              *\**)
+                prefix="${destination%%\**}"
+                case refs/heads/main in "$prefix"*|refs/"$prefix"*) targets_main=1 ;; esac
+                ;;
+              main|heads/main|refs/heads/main) targets_main=1 ;;
+            esac
             ;;
         esac
         ;;
@@ -84,8 +100,9 @@ while IFS= read -r simple_command; do
 done < <(
   # コマンド置換は、中身を別のコマンドとして後ろへ移し、元の位置に $ を残す。その場で区切ると、後ろの引数を見失う。
   # リダイレクトは引数の間にも書けるので、refspec に数えないよう区切る前に取り除く。
+  # ${VAR:-x} の : は refspec の区切りではないので、先に $ 1 文字へまとめる。
   printf '%s\n' "$command_line" | tr -d "\"'" |
-    sed -E -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
+    sed -E -e 's/\$\{[^}]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
       -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
     tr ';&|()`' '\n'
 )
