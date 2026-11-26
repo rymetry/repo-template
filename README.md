@@ -31,18 +31,25 @@ bash .github/scripts/setup-repo.sh
 | **不要機能** | Projects / Discussions / Wiki を OFF |
 | **ブランチ自動削除** | マージ後に自動削除 |
 
-### 3. README と AGENTS.md を書き換える
-
-- このファイルをプロジェクト固有の内容に置き換えてください。
-- `AGENTS.md` にプロジェクト概要とコマンドを記載してください。
-
-### 4. 依存とプラグインを入れる
+### 3. 依存とプラグインを入れる
 
 ```bash
 pnpm install
 ```
 
 [必要なプラグイン](#必要なプラグイン)を、使うエージェントに入れてください。
+
+### 4. アーキテクチャを決める
+
+エージェントに次のどちらかを伝えます。決まった構成は `docs/architecture/overview.md` に記録されます(手順は `deciding-architecture` スキル)。
+
+- 別のスレッドで作ったプランがある場合: プランを渡し、それを元に始めるよう伝える。プランはエージェントが `docs/plans/` に保存します。
+- プランがない場合: 作りたいものを相談する。
+
+### 5. README と AGENTS.md を書き換える
+
+- このファイルをプロジェクト固有の内容に置き換えてください。
+- `AGENTS.md` にプロジェクト概要とコマンドを記載してください。
 
 ## AI エージェント
 
@@ -74,6 +81,7 @@ pnpm install
 |---|---|---|
 | `writing-tests` | テストコードの書き方と、生き残りやすい変異の型 | このリポジトリ |
 | `change-review` | レビューの担当・報告の基準・指摘の判断 | このリポジトリ |
+| `deciding-architecture` | 構成を決める・変えるときの手順と、境界の原則の初期値 | このリポジトリ |
 | `mutator` | 変異テストの導入・実行・結果の読み方 | [`@mizchi/mutator`](https://github.com/mizchi/mutator) の写し |
 | `mutation-test-loop` | 生き残った変異をテストで埋める手順 | 同上 |
 
@@ -114,6 +122,7 @@ CLAUDE.md                              # AGENTS.md の取り込み + Claude Code
   skills/                              # スキルの正本
     writing-tests/
     change-review/
+    deciding-architecture/
     mutator/                           # @mizchi/mutator の写し
     mutation-test-loop/                # 同上
   hooks/
@@ -140,6 +149,8 @@ CLAUDE.md                              # AGENTS.md の取り込み + Claude Code
   scripts/
     setup-repo.sh                      # GitHub 設定自動化スクリプト
     sync-skills.sh                     # パッケージ同梱のスキルを写す
+docs/
+  architecture/overview.md             # 構成と判断の記録(雛形)
 package.json                           # mutator(変異テスト)
 pnpm-lock.yaml
 LICENSE                                # MIT License(英語 + 日本語)
