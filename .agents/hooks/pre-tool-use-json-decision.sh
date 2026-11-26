@@ -2,14 +2,25 @@
 # 終了コードではなく標準出力の JSON で可否を受け取るエージェント向けに、共通の判定結果を変換する。
 set -uo pipefail
 
-command -v jq >/dev/null || { echo '{"decision":"deny","reason":"hook の実行に jq が必要です。"}'; exit 0; }
+# jq を入れるコマンドも止めないよう、標準入力は外部コマンドを使わずに読む。
+IFS= read -r -d '' input || true
+
+# jq がないとコマンドを取り出せないので、git push を含む入力だけを拒否し、jq の導入などは通す。
+# gi""t のように引用符やバックスラッシュで分けた語も見つけるため、それらを除いてから探す。
+if ! command -v jq >/dev/null; then
+  normalized=${input//[\"\'\\]/}
+  case "$normalized" in
+    *git*push*|*push*git*) echo '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' ;;
+    *) echo '{"decision":"allow"}' ;;
+  esac
+  exit 0
+fi
 
 hooks_dir="$(cd "$(dirname "$0")" && pwd)"
 
 # 入力には直前のユーザー発言も含まれるため、実行するコマンドだけを判定に渡す。
 # コマンドを取り出せない入力は判定できないので、許可せずに拒否する。
 # 読めるのは toolCall.args.CommandLine の形だけ。入力の形が違うエージェントをつなぐときは、その形をここに足す。
-input="$(cat)"
 if ! jq -e '.toolCall.args.CommandLine | select(type == "string" and length > 0)' <<<"$input" >/dev/null 2>&1; then
   echo '{"decision":"deny","reason":"hook が実行するコマンドを入力から取り出せませんでした。"}'
   exit 0

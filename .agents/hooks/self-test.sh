@@ -104,6 +104,11 @@ expect_both allow 'git push -f origin HEAD:'
 expect_both deny 'git push -f origin main:'
 expect_both deny 'git push -f origin "${SOURCE:-feature}:main"'
 expect_both deny 'git push -f "$(git remote)" "$(echo x)" main'
+expect_both deny 'echo "${X:-$(git push -f origin main)}"'
+expect_both deny 'echo "${X:-`git push -f origin main`}"'
+expect_both deny 'git push -f "$(echo ${X:-(a)})" main'
+expect_both deny 'git push -f -ogo origin main'
+expect_both allow 'git push -ofo origin main'
 expect_both deny 'git push -f "$(git remote)" main'
 expect_both deny 'git push -f `git remote` main'
 expect_both deny 'echo "$(git push -f origin main)"'
@@ -169,8 +174,19 @@ expect 'policy joins a command given as an array' "2 $blocked_reason" \
 expect 'policy allows an ordinary command given as an array' "$allowed" \
   "$(jq -cn '{tool_input: {command: ["ls", "-la"]}}' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 
-expect 'policy blocks when jq is missing' '2 Blocked: hook の実行に jq が必要です。' \
-  "$(printf '{}' | result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+# jq がなくても、jq を入れるコマンドは通し、git push だけを止める。
+expect 'policy blocks git push when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
+  "$(printf '{"tool_input":{"command":"git push origin feature"}}' |
+    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'policy blocks a quoted git push when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
+  "$(jq -cn '{tool_input: {command: "\"gi\"\"t\" pu\\sh -f origin main"}}' |
+    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'policy blocks push before git when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
+  "$(jq -cn '{tool_input: {command: "p=push; git $p -f origin main"}}' |
+    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'policy allows installing jq when jq is missing' "$allowed" \
+  "$(printf '{"tool_input":{"command":"brew install jq"}}' |
+    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
 expect 'policy blocks input that is not JSON' '2 Blocked: hook の入力を JSON として読めません。' \
   "$(printf 'not json' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 
@@ -179,8 +195,19 @@ expect 'json decision passes on the reason for a denial' \
   "$(run_json_decision "$force_push")"
 expect 'json decision allows an ordinary command' allow "$(json_decision 'npm test')"
 expect 'json decision ignores the user message' allow "$(json_decision 'ls' "$force_push")"
-expect 'json decision denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
-  "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+expect 'json decision denies git push when jq is missing' \
+  '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' \
+  "$(printf '{"toolCall":{"args":{"CommandLine":"git push origin feature"}}}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+expect 'json decision denies a quoted git push when jq is missing' deny \
+  "$(jq -cn '{toolCall: {args: {CommandLine: "gi'"'"''"'"'t push -f origin main"}}}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
+expect 'json decision denies push before git when jq is missing' deny \
+  "$(jq -cn '{toolCall: {args: {CommandLine: "p=push; git $p -f origin main"}}}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
+expect 'json decision allows installing jq when jq is missing' '{"decision":"allow"}' \
+  "$(printf '{"toolCall":{"args":{"CommandLine":"brew install jq"}}}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
 
 json_decision_for_payload() {
   jq -cn "$1" | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision

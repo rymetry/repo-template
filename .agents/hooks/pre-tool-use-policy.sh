@@ -2,9 +2,16 @@
 # 標準入力は Claude Code / Codex の PreToolUse の JSON。他の形式は呼び出し側でこの形に直す。
 set -uo pipefail
 
-command -v jq >/dev/null || { echo "Blocked: hook の実行に jq が必要です。" >&2; exit 2; }
+# jq を入れるコマンドも止めないよう、標準入力は外部コマンドを使わずに読む。
+IFS= read -r -d '' input || true
 
-input="$(cat)"
+# jq がないとコマンドを取り出せないので、git push を含む入力だけを止め、jq の導入などは通す。
+# gi""t のように引用符やバックスラッシュで分けた語も見つけるため、それらを除いてから探す。
+if ! command -v jq >/dev/null; then
+  normalized=${input//[\"\'\\]/}
+  case "$normalized" in *git*push*|*push*git*) echo "Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。" >&2; exit 2 ;; esac
+  exit 0
+fi
 
 # cwd などコマンド以外の項目に含まれる文字列で誤判定しないよう、実行するコマンドだけを見る。
 # 引数の配列で渡されたコマンドは 1 行につなぐ。
@@ -20,7 +27,7 @@ current_branch="${current_branch:-main}"
 
 # 単純コマンド 1 つ分の単語を受け取り、main への force push なら 0 を返す。
 is_force_push_to_main() {
-  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix
+  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix cluster
   for word in "$@"; do
     case "$state" in
       start)
@@ -40,9 +47,7 @@ is_force_push_to_main() {
       push)
         # git push は長いオプションの省略形(--force-w など)も受け付けるので、一意に決まる前方一致で比べる。
         case "$word" in
-          # -o の値は次の単語。-fo のようにまとめて書いても同じ。
-          -o|-[!-]*o) case "$word" in *f*) force=1 ;; esac; state=push_option_value ;;
-          --force*|-f*|-[!-]*f*) force=1 ;;
+          --force*) force=1 ;;
           # すべてのブランチを送るので、main も宛先に含まれる。--mirror は force なしでも上書きする。
           --al*|--b*) targets_main=1 ;;
           --m*) force=1; targets_main=1 ;;
@@ -51,6 +56,18 @@ is_force_push_to_main() {
           # 値を = でつないだオプションの次の単語は、値ではない。
           --*=*) ;;
           --pu*|--rep*|--rece*|--e*) state=push_option_value ;;
+          # 短いオプションは git と同じく 1 文字ずつ読む。-o の値は、続く文字があればその残り、なければ次の単語。
+          -[!-]*)
+            cluster="${word#-}"
+            while [ -n "$cluster" ]; do
+              case "$cluster" in
+                f*) force=1 ;;
+                o) state=push_option_value ;;
+                o*) break ;;
+              esac
+              cluster="${cluster#?}"
+            done
+            ;;
           -*) ;;
           *)
             positionals=$((positionals + 1))
@@ -100,10 +117,11 @@ while IFS= read -r simple_command; do
 done < <(
   # コマンド置換は、中身を別のコマンドとして後ろへ移し、元の位置に $ を残す。その場で区切ると、後ろの引数を見失う。
   # リダイレクトは引数の間にも書けるので、refspec に数えないよう区切る前に取り除く。
-  # ${VAR:-x} の : は refspec の区切りではないので、先に $ 1 文字へまとめる。
+  # ${VAR:-x} の : は refspec の区切りではないので $ 1 文字へまとめる。
+  # 中の ( ) がコマンド置換の移動を妨げないよう先にまとめ、中にコマンド置換を含むものだけは移した後でまとめる。
   printf '%s\n' "$command_line" | tr -d "\"'" |
-    sed -E -e 's/\$\{[^}]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
-      -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
+    sed -E -e 's/\$\{[^}$`]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
+      -e 's/\$\{[^}]*\}/$/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
     tr ';&|()`' '\n'
 )
 
