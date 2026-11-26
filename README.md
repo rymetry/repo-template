@@ -56,7 +56,8 @@ pnpm install
 | **Antigravity** | `AGENTS.md` を直接読む | `.agents/skills/` を直接読む | `.agents/hooks.json` |
 
 - Codex の hook は、プロジェクトを信頼し、`/hooks` で各 hook を承認すると有効になります。
-- Antigravity の hook は `jq` が必要です。配線しているのはコマンド実行前の検査だけで、コンフリクトマーカーの検出は Claude Code と Codex で動きます。
+- コマンド実行前の hook は、どのエージェントでも `jq` が必要です。`jq` がないと、`git push` を含むコマンドの実行を止めます(`jq` を入れるコマンドなどは通します)。
+- Antigravity に配線しているのはコマンド実行前の検査だけで、コンフリクトマーカーの検出は Claude Code と Codex で動きます。
 - Claude Code 固有の指示は `CLAUDE.md` の取り込み行の下に書きます。
 - 別のエージェントをつなぐときは、そのエージェントの設定ファイルから `.agents/hooks/` のスクリプトを呼びます。終了コード 2 でブロックできるなら `pre-tool-use-policy.sh` を、標準出力の JSON で可否を受け取るなら `pre-tool-use-json-decision.sh` を使います。後者が読める入力は Antigravity の形(`toolCall.args.CommandLine`)だけで、形が違うとすべてのコマンドを拒否するため、スクリプトにその形を足し、`self-test.sh` にケースを足してください。
 - `.claude/skills/` はシンボリックリンクです。Windows では、clone する前に Git の `core.symlinks` を有効にしてください(開発者モードか管理者権限が必要です)。無効のままだとリンクがテキストファイルになり、Claude Code がスキルを読めず、`sync-skills.sh` も失敗します。
