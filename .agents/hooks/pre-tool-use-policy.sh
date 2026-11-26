@@ -33,7 +33,10 @@ is_force_push_to_main() {
       push_option_value) state=push ;;
       push)
         case "$word" in
-          --force|--force-with-lease*|-f*|-[!-]*f*) force=1 ;;
+          # git は長いオプションの省略形(--force-w など)も受け付ける。
+          --force*|-f*|-[!-]*f*) force=1 ;;
+          # すべてのブランチを送るので、main も宛先に含まれる。
+          --all|--branches|--mirror) targets_main=1 ;;
           -o|--push-option|--repo|--receive-pack|--exec) state=push_option_value ;;
           -*) ;;
           *)

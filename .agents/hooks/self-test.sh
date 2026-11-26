@@ -64,6 +64,12 @@ force_push='git push --force origin main'
 on_branch feature
 expect_both deny "$force_push"
 expect_both deny 'git push --force-with-lease origin main'
+expect_both deny 'git push --force-w origin main'
+expect_both deny 'git push --force --all origin'
+expect_both deny 'git push -f --branches origin'
+expect_both deny 'git push -f --mirror'
+expect_both allow 'git push --all origin'
+expect_both allow 'git push -f --tags origin'
 expect_both deny 'git push -f origin main'
 expect_both deny 'git push -uf origin main'
 expect_both deny 'git push origin +main'
