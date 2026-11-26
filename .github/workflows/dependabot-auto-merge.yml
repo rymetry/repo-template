@@ -48,7 +48,7 @@ jobs:
       - name: Commit synced skills
         if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
         run: |
-          git add .agents/skills
+          git add .agents/skills .claude/skills
           if ! git diff --cached --quiet; then
             # [dependabot skip] を付けると、Dependabot はこのコミットがあってもリベースを続けられる。
             git -c user.name='github-actions[bot]' \

@@ -38,14 +38,14 @@ run_policy() {
     (cd "$repository" && bash "$hooks_dir/pre-tool-use-policy.sh")
 }
 
-run_antigravity() {
+run_json_decision() {
   jq -cn --arg command "$1" --arg message "${2:-}" \
     '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
-    (cd "$repository" && bash "$hooks_dir/antigravity-pre-tool-use.sh")
+    (cd "$repository" && bash "$hooks_dir/pre-tool-use-json-decision.sh")
 }
 
-antigravity_decision() {
-  run_antigravity "$@" | jq -r .decision
+json_decision() {
+  run_json_decision "$@" | jq -r .decision
 }
 
 allowed='0 '
@@ -56,7 +56,7 @@ expect_both() {
   local decision="$1" command="$2" expected="$allowed"
   [ "$decision" = allow ] || expected="2 $blocked_reason"
   expect "policy: $decision on $branch: $command" "$expected" "$(result_of run_policy "$command")"
-  expect "antigravity: $decision on $branch: $command" "$decision" "$(antigravity_decision "$command")"
+  expect "json decision: $decision on $branch: $command" "$decision" "$(json_decision "$command")"
 }
 
 force_push='git push --force origin main'
@@ -112,30 +112,30 @@ expect 'policy blocks when jq is missing' '2 Blocked: hook の実行に jq が�
 expect 'policy blocks input that is not JSON' '2 Blocked: hook の入力を JSON として読めません。' \
   "$(printf 'not json' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 
-expect 'antigravity passes on the reason for a denial' \
+expect 'json decision passes on the reason for a denial' \
   "$(jq -cn --arg reason "$blocked_reason" '{decision: "deny", reason: $reason}')" \
-  "$(run_antigravity "$force_push")"
-expect 'antigravity allows an ordinary command' allow "$(antigravity_decision 'npm test')"
-expect 'antigravity ignores the user message' allow "$(antigravity_decision 'ls' "$force_push")"
-expect 'antigravity denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
-  "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/antigravity-pre-tool-use.sh")"
+  "$(run_json_decision "$force_push")"
+expect 'json decision allows an ordinary command' allow "$(json_decision 'npm test')"
+expect 'json decision ignores the user message' allow "$(json_decision 'ls' "$force_push")"
+expect 'json decision denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
+  "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
 
-antigravity_decision_for_payload() {
-  jq -cn "$1" | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision
+json_decision_for_payload() {
+  jq -cn "$1" | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision
 }
 
-expect 'antigravity denies a payload without a command' deny "$(antigravity_decision_for_payload '{}')"
-expect 'antigravity denies a renamed command field' deny \
-  "$(antigravity_decision_for_payload '{toolCall: {args: {commandLine: "ls"}}}')"
-expect 'antigravity denies an empty command' deny \
-  "$(antigravity_decision_for_payload '{toolCall: {args: {CommandLine: ""}}}')"
-expect 'antigravity denies input that is not JSON' deny \
-  "$(printf 'not json' | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision)"
+expect 'json decision denies a payload without a command' deny "$(json_decision_for_payload '{}')"
+expect 'json decision denies a renamed command field' deny \
+  "$(json_decision_for_payload '{toolCall: {args: {commandLine: "ls"}}}')"
+expect 'json decision denies an empty command' deny \
+  "$(json_decision_for_payload '{toolCall: {args: {CommandLine: ""}}}')"
+expect 'json decision denies input that is not JSON' deny \
+  "$(printf 'not json' | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
 
 # 設定ファイルが指す hook が存在しないと、エージェントは何も知らせずに hook を無効にする。
 repository_root="$(cd "$hooks_dir/../.." && pwd)"
 for config in .claude/settings.json .codex/hooks.json .agents/hooks.json; do
-  referenced_scripts="$(grep -o '\.agents/hooks/[A-Za-z0-9_-]*\.sh' "$repository_root/$config" | sort -u)"
+  referenced_scripts="$(grep -o '\.[A-Za-z]*/hooks/[A-Za-z0-9_-]*\.sh' "$repository_root/$config" | sort -u)"
   expect "$config refers to a hook script" yes "$([ -n "$referenced_scripts" ] && echo yes || echo no)"
   for script in $referenced_scripts; do
     expect "$config: $script exists" yes "$([ -f "$repository_root/$script" ] && echo yes || echo no)"

@@ -10,6 +10,7 @@ permissions:
 
 # Actions はコミットの SHA で固定する。更新は Dependabot(.github/dependabot.yml)が提案する。
 jobs:
+  # このジョブ名は、setup-repo.sh がブランチ保護の必須チェックに指定している。
   check:
     runs-on: ubuntu-latest
     steps:

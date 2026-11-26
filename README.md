@@ -23,7 +23,7 @@ bash .github/scripts/setup-repo.sh
 |------|------|
 | **LICENSE** | プレースホルダーを実際の年・名前に置換 |
 | **SECURITY.md** | リポジトリ URL を自動設定 |
-| **Branch protection** | main に PR 必須 + 管理者バイパス |
+| **Branch protection** | main に PR 必須 + CI(`check`)の成功必須 + 管理者バイパス |
 | **Auto-merge** | 有効化 |
 | **Dependabot** | alerts + security updates 有効化 |
 | **Secret scanning** | secret scanning + push protection 有効化 |
@@ -88,7 +88,8 @@ pnpm install
 4. マージ後の `main` の CI が、写しとインストール済みパッケージのずれを検査します。
 
 - 写しを直したコミットには、PR の CI の結果が付きません(ワークフローのトークンによる push は CI を起動しないため)。Dependabot の元のコミットでは写しの検査が失敗しますが、写しを直したコミットが続いていれば問題ありません。
-- ブランチ保護で必須チェックを設定すると、この PR はチェックが付かずマージできません。その場合は、手元で空のコミットを push して CI を起動してください。コミットメッセージに `[dependabot skip]` を付けると、Dependabot はその PR のリベースを続けられます(付けないと、以後リベースしなくなります)。
+- ブランチ保護で CI を必須にしているため、チェックが付かないこの PR は通常の手順ではマージできません。管理者としてマージするか、手元で空のコミットを push して CI を起動してください。空のコミットのメッセージに `[dependabot skip]` を付けると、Dependabot はその PR のリベースを続けられます(付けないと、以後リベースしなくなります)。
+- パッケージに新しいスキルが同梱されると、写しと `.claude/skills/` のリンクも自動で足されます。
 - 手元で直すときは `bash .github/scripts/sync-skills.sh` を実行します。
 
 ### JS / TS 以外のプロジェクトで外すもの
@@ -99,7 +100,7 @@ mutator は Node.js 24 以上と、Vitest・Jest・Bun のいずれかのテス�
 - `.agents/skills/mutator/`、`.agents/skills/mutation-test-loop/` と、`.claude/skills/` の同名のリンク
 - `.github/scripts/sync-skills.sh`
 - `.github/dependabot.yml` の npm の設定
-- `.github/workflows/ci.yml` の pnpm 以降の手順
+- `.github/workflows/ci.yml` の pnpm 以降の手順(`check` というジョブ名は、ブランチ保護の必須チェックなので変えない)
 - `.github/workflows/dependabot-auto-merge.yml` の写しを直す 5 つの手順と、承認・マージの条件のうち `@mizchi/mutator` の部分
 - `AGENTS.md` の `mutator`・`mutation-test-loop` への言及
 
@@ -117,7 +118,7 @@ CLAUDE.md                              # AGENTS.md の取り込み + Claude Code
   hooks/
     pre-tool-use-policy.sh             # main への force push をブロック
     stop-verify.sh                     # コンフリクトマーカー検出
-    antigravity-pre-tool-use.sh        # Antigravity 向けに判定結果を変換
+    pre-tool-use-json-decision.sh      # 判定結果を JSON で返す(Antigravity が使う)
     self-test.sh                       # hook の自己検査
   hooks.json                           # Antigravity の hook 設定
 .claude/
