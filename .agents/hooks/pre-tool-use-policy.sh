@@ -11,7 +11,7 @@ IFS= read -r -d '' input || true
 if ! jq -n 1 >/dev/null 2>&1; then
   command_part=${input#*\"command\"}
   normalized=${command_part//[\"\'\\]/}
-  case "$normalized" in *git*push*|*push*git*) echo "Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。" >&2; exit 2 ;; esac
+  case "$normalized" in *[Gg][Ii][Tt]*[Pp][Uu][Ss][Hh]*|*[Pp][Uu][Ss][Hh]*[Gg][Ii][Tt]*) echo "Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。" >&2; exit 2 ;; esac
   exit 0
 fi
 
@@ -29,21 +29,24 @@ current_branch="${current_branch:-main}"
 
 # 単純コマンド 1 つ分の単語を受け取り、main への force push なら 0 を返す。
 is_force_push_to_main() {
-  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix cluster
+  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix cluster name
   for word in "$@"; do
     case "$state" in
       start)
-        case "$word" in
-          git|*/git|git.exe|*/git.exe) state=git ;;
+        # 大文字と小文字を区別しないファイルシステム(macOS、Windows)では GIT や Git.exe も git として動く。
+        name="${word##*/}"
+        case "$name" in *.[Ee][Xx][Ee]) name="${name%.*}" ;; esac
+        case "$name" in
+          [Gg][Ii][Tt]) state=git ;;
           # git の exec-path にある git-push も、git push と同じく動く。
-          git-push|*/git-push|git-push.exe|*/git-push.exe) state=push ;;
+          [Gg][Ii][Tt]-[Pp][Uu][Ss][Hh]) state=push ;;
         esac
         ;;
       git)
         case "$word" in
           -C|-c|--git-dir|--work-tree|--namespace|--config-env|--attr-source) state=git_option_value ;;
           -*) ;;
-          push) state=push ;;
+          [Pp][Uu][Ss][Hh]) state=push ;;
           # コミットメッセージなど、push 以外のサブコマンドの引数は判定しない。
           *) return 1 ;;
         esac
@@ -128,10 +131,10 @@ done < <(
   # ${VAR:-x} の : は refspec の区切りではないので $ 1 文字へまとめる。
   # 中の ( ) がコマンド置換の移動を妨げないよう先にまとめ、中にコマンド置換を含むものだけは移した後でまとめる。
   # 中に ( ) があって移せなかったコマンド置換は、%unresolved% の印に置き換え、後で判定できないものとして扱う。
-  # 算術式の $(( )) はコマンド置換ではないので、印を付けずにそのまま区切る。
+  # 中に ( ) のない $(( )) は算術式なので $ 1 文字へまとめる。$((cd x; ...)) のような書き方は、bash がコマンド置換として読むので印を付ける。
   printf '%s\n' "$command_line" | tr -d "\"'" |
     sed -E -e 's/\$\{[^}$`]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
-      -e 's/\$\{[^}]*\}/$/g' -e 's/\$\(\(/$ ((/g' -e 's/\$\(/ %unresolved% (/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
+      -e 's/\$\{[^}]*\}/$/g' -e 's/\$\(\(([^()]*)\)\)/$/g' -e 's/\$\(/ %unresolved% (/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
     tr ';&|()`' '\n'
 )
 
@@ -139,7 +142,7 @@ done < <(
 if [ "$unresolved" = 1 ]; then
   normalized=${command_line//[\"\'\\]/}
   case "$normalized" in
-    *git*push*|*push*git*)
+    *[Gg][Ii][Tt]*[Pp][Uu][Ss][Hh]*|*[Pp][Uu][Ss][Hh]*[Gg][Ii][Tt]*)
       echo "Blocked: コマンド置換を読み切れないため、main への force push かどうか判定できません。置換を変数に分けて実行してください。" >&2
       exit 2
       ;;

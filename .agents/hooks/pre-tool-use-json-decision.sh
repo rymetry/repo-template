@@ -20,7 +20,7 @@ if ! jq -n 1 >/dev/null 2>&1; then
   command_part="${first%%\"lastUserInput\"*} ${last%%\"lastUserInput\"*}"
   normalized=${command_part//[\"\'\\]/}
   case "$normalized" in
-    *git*push*|*push*git*) echo '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' ;;
+    *[Gg][Ii][Tt]*[Pp][Uu][Ss][Hh]*|*[Pp][Uu][Ss][Hh]*[Gg][Ii][Tt]*) echo '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' ;;
     *) echo '{"decision":"allow"}' ;;
   esac
   exit 0
