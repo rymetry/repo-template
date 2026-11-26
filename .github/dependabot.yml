@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  # エージェントのスキルを同梱するパッケージだけを更新する。.agents/skills/ の写しは更新 PR の中で自動で直る。
+  # ほかの依存も更新させるときは allow を外す。
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    allow:
+      - dependency-name: "@mizchi/mutator"

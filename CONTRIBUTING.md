@@ -10,6 +10,10 @@
 4. ブランチを push する (`git push origin feature/my-feature`)
 5. Pull Request を作成する
 
+## コーディングルール
+
+命名、コメント、テストなどのルールは [AGENTS.md](./AGENTS.md) にまとめています。人にも AI エージェントにも同じルールを適用します。
+
 ## コミットメッセージ
 
 [Conventional Commits](https://www.conventionalcommits.org/) に従います。

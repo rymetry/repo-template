@@ -83,7 +83,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Actions permissions
+# 4. Secret scanning
+# ---------------------------------------------------------------------------
+echo ""
+echo "🔑 Enabling secret scanning..."
+
+if gh api --silent -X PATCH "repos/$REPO" \
+  --input - <<'SCANNING' 2>/dev/null; then
+{
+  "security_and_analysis": {
+    "secret_scanning": { "status": "enabled" },
+    "secret_scanning_push_protection": { "status": "enabled" }
+  }
+}
+SCANNING
+  echo "  Secret scanning: ON"
+  echo "  Push protection: ON"
+else
+  echo "  ⚠️  Secret scanning の設定に失敗しました（Free プランのプライベートリポジトリでは利用不可）"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Actions permissions
 # ---------------------------------------------------------------------------
 echo ""
 echo "🔐 Configuring Actions permissions..."
@@ -102,7 +123,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Branch protection (main)
+# 6. Branch protection (main)
 # ---------------------------------------------------------------------------
 echo ""
 echo "🛡️  Setting up branch protection for main..."
@@ -129,7 +150,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. コミット & 完了
+# 7. コミット & 完了
 # ---------------------------------------------------------------------------
 echo ""
 echo "📦 Committing placeholder replacements..."
@@ -149,7 +170,6 @@ echo "  ✅ Setup complete!"
 echo "========================================="
 echo ""
 echo "Next steps:"
-echo "  1. README.md をプロジェクト固有の内容に書き換える"
-echo "  2. Settings > Security で Secret scanning を有効化する（UI のみ）"
-echo "  3. Settings > Security で Private vulnerability reporting を有効化する（UI のみ）"
+echo "  1. README.md と AGENTS.md をプロジェクト固有の内容に書き換える"
+echo "  2. Settings > Security で Private vulnerability reporting を有効化する（UI のみ）"
 echo ""

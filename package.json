@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "packageManager": "pnpm@10.8.0",
+  "devDependencies": {
+    "@mizchi/mutator": "0.5.5"
+  }
+}

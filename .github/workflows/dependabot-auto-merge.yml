@@ -18,6 +18,39 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # スキルを同梱するパッケージの更新では、マージの前に .agents/skills/ の写しを PR ブランチ上で直す。
+      - name: Checkout PR branch
+        if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set up pnpm
+        if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Set up Node.js
+        if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Sync bundled skills
+        if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
+        run: |
+          # このジョブのトークンは書き込み権限を持つため、更新直後のパッケージのスクリプトは実行しない。
+          pnpm install --frozen-lockfile --ignore-scripts
+          bash .github/scripts/sync-skills.sh
+          git add .agents/skills
+          if ! git diff --cached --quiet; then
+            # [dependabot skip] を付けると、Dependabot はこのコミットがあってもリベースを続けられる。
+            git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'chore: スキルの写しを更新 [dependabot skip]'
+            git push
+          fi
+
       - name: Approve PR
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         run: gh pr review "$PR_URL" --approve

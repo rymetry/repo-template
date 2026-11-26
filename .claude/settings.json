@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/env bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-tool-use-policy.sh\"",
+            "command": "/usr/bin/env bash \"$CLAUDE_PROJECT_DIR/.agents/hooks/pre-tool-use-policy.sh\"",
             "timeout": 5
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/env bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-verify.sh\"",
+            "command": "/usr/bin/env bash \"$CLAUDE_PROJECT_DIR/.agents/hooks/stop-verify.sh\"",
             "timeout": 120
           }
         ]
