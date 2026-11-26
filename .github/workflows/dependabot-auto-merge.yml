@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.head_ref }}
+          # トークンは push する手順にだけ渡す。
+          persist-credentials: false
 
       - name: Set up pnpm
         if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
@@ -39,17 +41,24 @@ jobs:
       - name: Sync bundled skills
         if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
         run: |
-          # このジョブのトークンは書き込み権限を持つため、更新直後のパッケージのスクリプトは実行しない。
+          # このジョブは書き込み権限を持つため、更新直後のパッケージのスクリプトは実行しない。
           pnpm install --frozen-lockfile --ignore-scripts
           bash .github/scripts/sync-skills.sh
+
+      - name: Commit synced skills
+        if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
+        run: |
           git add .agents/skills
           if ! git diff --cached --quiet; then
             # [dependabot skip] を付けると、Dependabot はこのコミットがあってもリベースを続けられる。
             git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m 'chore: スキルの写しを更新 [dependabot skip]'
-            git push
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${HEAD_REF}"
           fi
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Approve PR
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'

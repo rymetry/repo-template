@@ -99,7 +99,7 @@ mutator は Node.js 24 以上と、Vitest・Jest・Bun のいずれかのテス�
 - `.github/scripts/sync-skills.sh`
 - `.github/dependabot.yml` の npm の設定
 - `.github/workflows/ci.yml` の pnpm 以降の手順
-- `.github/workflows/dependabot-auto-merge.yml` の写しを直す 4 つの手順
+- `.github/workflows/dependabot-auto-merge.yml` の写しを直す 5 つの手順
 - `AGENTS.md` の `mutator`・`mutation-test-loop` への言及
 
 ## 含まれるファイル
