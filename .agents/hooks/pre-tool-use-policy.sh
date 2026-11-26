@@ -5,10 +5,12 @@ set -uo pipefail
 # jq を入れるコマンドも止めないよう、標準入力は外部コマンドを使わずに読む。
 IFS= read -r -d '' input || true
 
-# jq がないとコマンドを取り出せないので、git push を含む入力だけを止め、jq の導入などは通す。
+# jq がない、または動かないとコマンドを取り出せないので、git push を含む入力だけを止め、jq の導入などは通す。
+# cwd などのパスで止めないよう、最初の "command" の項目より前は見ない。後ろは削らないので、コマンドを見落とさない。
 # gi""t のように引用符やバックスラッシュで分けた語も見つけるため、それらを除いてから探す。
-if ! command -v jq >/dev/null; then
-  normalized=${input//[\"\'\\]/}
+if ! jq -n 1 >/dev/null 2>&1; then
+  command_part=${input#*\"command\"}
+  normalized=${command_part//[\"\'\\]/}
   case "$normalized" in *git*push*|*push*git*) echo "Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。" >&2; exit 2 ;; esac
   exit 0
 fi
@@ -31,7 +33,11 @@ is_force_push_to_main() {
   for word in "$@"; do
     case "$state" in
       start)
-        case "$word" in git|*/git) state=git ;; esac
+        case "$word" in
+          git|*/git|git.exe|*/git.exe) state=git ;;
+          # git の exec-path にある git-push も、git push と同じく動く。
+          git-push|*/git-push|git-push.exe|*/git-push.exe) state=push ;;
+        esac
         ;;
       git)
         case "$word" in
@@ -108,7 +114,9 @@ set -f
 # shortcut: 引用符を外し、区切り記号と空白で分けるだけで、変数の値・エイリアス・cd や -C の移動先は追わない。
 # 引用した文字列の中に区切り記号と同じ文言があれば、それも止める。
 # これらが問題になったら、シェルの構文解析に置き換える。
+unresolved=0
 while IFS= read -r simple_command; do
+  case "$simple_command" in *%unresolved%*) unresolved=1 ;; esac
   # shellcheck disable=SC2086 # 単語に分けるために引用符を付けない。
   if is_force_push_to_main $simple_command; then
     echo "Blocked: force push to main is not allowed." >&2
@@ -119,10 +127,23 @@ done < <(
   # リダイレクトは引数の間にも書けるので、refspec に数えないよう区切る前に取り除く。
   # ${VAR:-x} の : は refspec の区切りではないので $ 1 文字へまとめる。
   # 中の ( ) がコマンド置換の移動を妨げないよう先にまとめ、中にコマンド置換を含むものだけは移した後でまとめる。
+  # 中に ( ) があって移せなかったコマンド置換は、%unresolved% の印に置き換え、後で判定できないものとして扱う。
+  # 算術式の $(( )) はコマンド置換ではないので、印を付けずにそのまま区切る。
   printf '%s\n' "$command_line" | tr -d "\"'" |
     sed -E -e 's/\$\{[^}$`]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
-      -e 's/\$\{[^}]*\}/$/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
+      -e 's/\$\{[^}]*\}/$/g' -e 's/\$\(\(/$ ((/g' -e 's/\$\(/ %unresolved% (/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
     tr ';&|()`' '\n'
 )
+
+# 移せなかったコマンド置換があると、その中身や後ろの引数、git の後ろの push を追えない。git push を含むなら、判定できないので止める。
+if [ "$unresolved" = 1 ]; then
+  normalized=${command_line//[\"\'\\]/}
+  case "$normalized" in
+    *git*push*|*push*git*)
+      echo "Blocked: コマンド置換を読み切れないため、main への force push かどうか判定できません。置換を変数に分けて実行してください。" >&2
+      exit 2
+      ;;
+  esac
+fi
 
 exit 0
