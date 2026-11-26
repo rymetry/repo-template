@@ -7,18 +7,34 @@ cd "$(git rev-parse --show-toplevel)"
 
 package=node_modules/@mizchi/mutator
 # 写すスキルは明示する。同梱されたものをすべて写すと、同じ名前のこのリポジトリのスキルを上書きする。
-skills_to_sync=(mutator mutation-test-loop)
-
-mode="${1:-}"
+skills_to_sync="mutator mutation-test-loop"
+# 同梱されているが写さないと決めたスキルは、ここに空白区切りで書く。
+skills_to_skip=""
 
 fail() {
   echo "sync-skills: $1" >&2
   exit 1
 }
 
+case "${1:-}" in
+  "") check_only=false ;;
+  --check) check_only=true ;;
+  *) fail "引数は --check だけを受け付けます: $1" ;;
+esac
+
 [ -d "$package/skills" ] || fail "$package/skills がありません。先に pnpm install を実行してください。"
 
-for skill in "${skills_to_sync[@]}"; do
+# 一覧にないスキルは自動では写さない。エージェントへの指示が増えるため、中身を確認して決める。
+for bundled in "$package"/skills/*/; do
+  [ -d "$bundled" ] || continue
+  skill="$(basename "$bundled")"
+  case " $skills_to_sync $skills_to_skip " in
+    *" $skill "*) ;;
+    *) fail "一覧にないスキル $skill が同梱されています。中身を確認し、このスクリプトの skills_to_sync か skills_to_skip に足してください。" ;;
+  esac
+done
+
+for skill in $skills_to_sync; do
   bundled="$package/skills/$skill"
   copy=".agents/skills/$skill"
   link=".claude/skills/$skill"
@@ -26,7 +42,7 @@ for skill in "${skills_to_sync[@]}"; do
 
   [ -d "$bundled" ] || fail "$skill がパッケージに同梱されていません。名前の変更か削除を確認し、写しとこの一覧を直してください。"
 
-  if [ "$mode" = "--check" ]; then
+  if "$check_only"; then
     diff -r -x LICENSE "$bundled" "$copy"
     diff "$package/LICENSE" "$copy/LICENSE"
   else
@@ -41,21 +57,3 @@ for skill in "${skills_to_sync[@]}"; do
   [ "$(readlink "$link" 2>/dev/null)" = "$link_target" ] ||
     fail "$link が $link_target へのシンボリックリンクではありません。"
 done
-
-# 一覧にないスキルは自動では写さない。エージェントへの指示が増えるため、中身を確認して一覧に足す。
-unlisted_skills=""
-for bundled in "$package"/skills/*/; do
-  [ -d "$bundled" ] || continue
-  skill="$(basename "$bundled")"
-  case " ${skills_to_sync[*]} " in
-    *" $skill "*) ;;
-    *) unlisted_skills="$unlisted_skills $skill" ;;
-  esac
-done
-
-if [ -n "$unlisted_skills" ]; then
-  echo "sync-skills: 一覧にないスキルが同梱されています:$unlisted_skills" >&2
-  if [ "$mode" = "--check" ]; then
-    exit 1
-  fi
-fi
