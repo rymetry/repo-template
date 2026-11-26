@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Antigravity は終了コードではなく標準出力の JSON で可否を判定するため、共通の判定結果を変換する。
+# 終了コードではなく標準出力の JSON で可否を受け取るエージェント向けに、共通の判定結果を変換する。
 set -uo pipefail
 
 command -v jq >/dev/null || { echo '{"decision":"deny","reason":"hook の実行に jq が必要です。"}'; exit 0; }

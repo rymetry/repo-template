@@ -20,10 +20,10 @@ policy_exit() {
   echo $?
 }
 
-antigravity_decision() {
+json_decision() {
   jq -cn --arg command "$1" --arg message "${2:-}" \
     '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
-    bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision
+    bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision
 }
 
 force_push='git push --force origin main'
@@ -32,28 +32,28 @@ expect 'policy blocks force push to main' 2 "$(policy_exit "command: $force_push
 expect 'policy blocks forced refspec to main' 2 "$(policy_exit 'command: git push origin +main')"
 expect 'policy allows push to another branch' 0 "$(policy_exit 'command: git push origin feature')"
 
-expect 'antigravity denies force push to main' deny "$(antigravity_decision "$force_push")"
-expect 'antigravity allows an ordinary command' allow "$(antigravity_decision 'npm test')"
-expect 'antigravity ignores the user message' allow "$(antigravity_decision 'ls' "$force_push")"
-expect 'antigravity denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
-  "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/antigravity-pre-tool-use.sh")"
+expect 'json decision denies force push to main' deny "$(json_decision "$force_push")"
+expect 'json decision allows an ordinary command' allow "$(json_decision 'npm test')"
+expect 'json decision ignores the user message' allow "$(json_decision 'ls' "$force_push")"
+expect 'json decision denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
+  "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
 
-antigravity_decision_for_payload() {
-  jq -cn "$1" | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision
+json_decision_for_payload() {
+  jq -cn "$1" | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision
 }
 
-expect 'antigravity denies a payload without a command' deny "$(antigravity_decision_for_payload '{}')"
-expect 'antigravity denies a renamed command field' deny \
-  "$(antigravity_decision_for_payload '{toolCall: {args: {commandLine: "ls"}}}')"
-expect 'antigravity denies an empty command' deny \
-  "$(antigravity_decision_for_payload '{toolCall: {args: {CommandLine: ""}}}')"
-expect 'antigravity denies input that is not JSON' deny \
-  "$(printf 'not json' | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision)"
+expect 'json decision denies a payload without a command' deny "$(json_decision_for_payload '{}')"
+expect 'json decision denies a renamed command field' deny \
+  "$(json_decision_for_payload '{toolCall: {args: {commandLine: "ls"}}}')"
+expect 'json decision denies an empty command' deny \
+  "$(json_decision_for_payload '{toolCall: {args: {CommandLine: ""}}}')"
+expect 'json decision denies input that is not JSON' deny \
+  "$(printf 'not json' | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
 
 # 設定ファイルが指す hook が存在しないと、エージェントは何も知らせずに hook を無効にする。
 repository_root="$(cd "$hooks_dir/../.." && pwd)"
 for config in .claude/settings.json .codex/hooks.json .agents/hooks.json; do
-  referenced_scripts="$(grep -o '\.agents/hooks/[A-Za-z0-9_-]*\.sh' "$repository_root/$config" | sort -u)"
+  referenced_scripts="$(grep -o '\.[A-Za-z]*/hooks/[A-Za-z0-9_-]*\.sh' "$repository_root/$config" | sort -u)"
   expect "$config refers to a hook script" yes "$([ -n "$referenced_scripts" ] && echo yes || echo no)"
   for script in $referenced_scripts; do
     expect "$config: $script exists" yes "$([ -f "$repository_root/$script" ] && echo yes || echo no)"

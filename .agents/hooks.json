@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/env bash \"$(git rev-parse --show-toplevel)/.agents/hooks/antigravity-pre-tool-use.sh\"",
+            "command": "/usr/bin/env bash \"$(git rev-parse --show-toplevel)/.agents/hooks/pre-tool-use-json-decision.sh\"",
             "timeout": 5
           }
         ]
