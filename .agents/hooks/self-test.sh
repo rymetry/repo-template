@@ -116,13 +116,20 @@ for command in \
   'git -C "$(case x in (a) echo .;; esac)" push -f origin main' \
   'git push -f -o "$(case x in (a) echo x;; esac)" origin main' \
   'git push -f $((cd app); echo origin) main' \
-  'x=$(( "1" + 1 )); git push origin feature' \
   'git push -f $((x\)) main' \
+  '$(case x in (a) echo git;; esac) push -f origin main' \
+  'X=1 $(case x in (a) echo git;; esac) push -f origin main' \
+  'x= $(case x in (a) echo git;; esac) push -f origin main' \
+  'git push -f --repo=$(case x in (a) echo origin;; esac) main' \
   'GIT PUSH -f "$(case x in (a) echo origin;; esac)" main'; do
   expect "policy: unresolved on $branch: $command" "2 $unresolved_reason" "$(result_of run_policy "$command")"
   expect "json decision: unresolved on $branch: $command" deny "$(json_decision "$command")"
 done
 expect_both allow 'echo "$(case x in (a) echo ok;; esac)"'
+# git 以外のコマンドの引数にある、移せないコマンド置換は判定に影響しない。
+expect_both allow 'x=$(( "1" + 1 )); git push origin feature'
+expect_both allow $'gh pr create --body "$(cat <<\'EOF\'\n## 概要\nforce push を止める(github)\nEOF\n)"'
+expect_both allow $'git commit -m "$(cat <<\'EOF\'\nfix: force push の判定 (git push)\nEOF\n)" && git push origin feature'
 expect_both deny 'echo $( (cd app && git push -f origin main) )'
 # 中に ( ) のない $(( )) は、中身がコマンドに見えても bash は算術式として読み、実行しない。
 expect_both allow 'x=$((x + 1)); git push origin feature'

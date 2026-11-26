@@ -29,10 +29,18 @@ current_branch="${current_branch:-main}"
 
 # 単純コマンド 1 つ分の単語を受け取り、main への force push なら 0 を返す。
 is_force_push_to_main() {
-  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix cluster name
+  local state=start force=0 targets_main=0 tags_only=0 positionals=0 word destination prefix cluster name seen_command=0
   for word in "$@"; do
+    # 移せなかったコマンド置換がコマンド名か git の引数の位置にあると、その後ろを追えない。
+    # 他のコマンドの引数(gh pr create --body "$(cat <<EOF ...)" など)や、代入の値(x=$(...))にあっても、判定には影響しない。
+    case "$word" in
+      %unresolved%) { [ "$seen_command" = 0 ] || [ "$state" != start ]; } && unresolved=1; seen_command=1; continue ;;
+      %value%) [ "$state" = start ] || unresolved=1; continue ;;
+    esac
     case "$state" in
       start)
+        # X=1 git push のような代入は、コマンド名ではない。
+        case "$word" in [A-Za-z_]*=*) ;; *) seen_command=1 ;; esac
         # 大文字と小文字を区別しないファイルシステム(macOS、Windows)では GIT や Git.exe も git として動く。
         name="${word##*/}"
         case "$name" in *.[Ee][Xx][Ee]) name="${name%.*}" ;; esac
@@ -119,7 +127,6 @@ set -f
 # これらが問題になったら、シェルの構文解析に置き換える。
 unresolved=0
 while IFS= read -r simple_command; do
-  case "$simple_command" in *%unresolved%*) unresolved=1 ;; esac
   # shellcheck disable=SC2086 # 単語に分けるために引用符を付けない。
   if is_force_push_to_main $simple_command; then
     echo "Blocked: force push to main is not allowed." >&2
@@ -131,15 +138,16 @@ done < <(
   # ${VAR:-x} の : は refspec の区切りではないので $ 1 文字へまとめる。
   # 中の ( ) がコマンド置換の移動を妨げないよう先にまとめ、中にコマンド置換を含むものだけは移した後でまとめる。
   # 中に ( ) があって移せなかったコマンド置換は、%unresolved% の印に置き換え、後で判定できないものとして扱う。
+  # = の直後(x=$(...)、--repo=$(...))のものは %value% の印にし、代入の値か git の引数かで扱いを分ける。
   # $(( )) は、中身が名前・数字・$・空白・演算子だけのときに限り算術式として $ 1 文字へまとめる。
   # 引用符などがあると bash の読み方が変わりうるので、引用符を外す前に調べ、それ以外は印を付ける。
   printf '%s\n' "$command_line" | sed -E 's#\$\(\(([[:alnum:]_[:space:]$+*/%<>=!~^?:,.&|-]*)\)\)#$#g' | tr -d "\"'" |
     sed -E -e 's/\$\{[^}$`]*\}/$/g' -e ':hoist' -e 's/\$\(([^()]*)\)(.*)$/$\2;\1/' -e 's/`([^`]*)`(.*)$/$\2;\1/' -e 't hoist' \
-      -e 's/\$\{[^}]*\}/$/g' -e 's/\$\(/ %unresolved% (/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
+      -e 's/\$\{[^}]*\}/$/g' -e 's/=\$\(/= %value% (/g' -e 's/\$\(/ %unresolved% (/g' -e 's/[0-9]*&?[<>]+&?[[:space:]]*[^[:space:];&|()]*//g' |
     tr ';&|()`' '\n'
 )
 
-# 移せなかったコマンド置換があると、その中身や後ろの引数、git の後ろの push を追えない。git push を含むなら、判定できないので止める。
+# git のコマンドに移せなかったコマンド置換があると、その後ろの引数や push を追えない。git push を含むなら、判定できないので止める。
 if [ "$unresolved" = 1 ]; then
   normalized=${command_line//[\"\'\\]/}
   case "$normalized" in
