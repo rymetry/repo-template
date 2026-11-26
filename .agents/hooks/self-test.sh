@@ -89,6 +89,7 @@ expect_both deny 'echo "$(git push -f origin main)"'
 expect_both deny 'echo `git push -f origin main`'
 expect_both allow 'git push -f origin feature > main'
 expect_both allow 'git push origin main'
+expect_both allow 'git push -u origin main'
 expect_both allow 'git push --follow-tags origin main'
 expect_both allow 'git push -f'
 expect_both allow 'git push -f origin'
@@ -112,6 +113,7 @@ expect_both deny 'git push --force-with-lease origin "$(git branch --show-curren
 expect_both deny 'git push -f origin 2>&1'
 expect_both deny 'git push -f origin > push.log'
 expect_both deny 'git push -f && echo done'
+expect_both deny 'git push -f 2>&1 | tail -3'
 # 値を取るオプションの値は、リモートに数えない。
 for option in -o --push-option --repo; do
   expect_both deny "git push -f $option value origin"

@@ -76,7 +76,7 @@ is_force_push_to_main() {
 set -f
 
 # shortcut: 引用符を外し、区切り記号と空白で分けるだけで、変数の値・エイリアス・コマンド置換の中身・cd や -C の移動先は追わない。
-# 引用した文字列の中に区切り記号と同じ文言があれば、それも止める。
+# git より前の単語は読み飛ばすので、echo や rg の引数、引用した文字列の中に force push の文言があっても止める。
 # 普通の書き方の見落としが問題になったら、シェルの構文解析に置き換える。
 while IFS= read -r simple_command; do
   # shellcheck disable=SC2086 # 単語に分けるために引用符を付けない。
