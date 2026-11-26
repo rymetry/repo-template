@@ -53,7 +53,7 @@ expect 'antigravity denies input that is not JSON' deny \
 # 設定ファイルが指す hook が存在しないと、エージェントは何も知らせずに hook を無効にする。
 repository_root="$(cd "$hooks_dir/../.." && pwd)"
 for config in .claude/settings.json .codex/hooks.json .agents/hooks.json; do
-  referenced_scripts="$(grep -o '\.agents/hooks/[a-z-]*\.sh' "$repository_root/$config" | sort -u)"
+  referenced_scripts="$(grep -o '\.agents/hooks/[A-Za-z0-9_-]*\.sh' "$repository_root/$config" | sort -u)"
   expect "$config refers to a hook script" yes "$([ -n "$referenced_scripts" ] && echo yes || echo no)"
   for script in $referenced_scripts; do
     expect "$config: $script exists" yes "$([ -f "$repository_root/$script" ] && echo yes || echo no)"
