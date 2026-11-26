@@ -15,24 +15,100 @@ expect() {
   fi
 }
 
-policy_exit() {
-  printf '%s' "$1" | bash "$hooks_dir/pre-tool-use-policy.sh" >/dev/null 2>&1
-  echo $?
+repository="$(mktemp -d)"
+trap 'rm -rf "$repository"' EXIT
+git -C "$repository" init -q
+
+# 判定は現在のブランチにも依存するため、ブランチを決めたリポジトリの中で hook を動かす。
+on_branch() {
+  branch="$1"
+  git -C "$repository" symbolic-ref HEAD "refs/heads/$branch"
+}
+
+# 終了コードと標準エラーを 1 行で返す。
+result_of() {
+  local reason
+  reason="$("$@" 2>&1 >/dev/null)"
+  echo "$? $reason"
+}
+
+run_policy() {
+  jq -cn --arg command "$1" --arg cwd "${2:-$repository}" \
+    '{cwd: $cwd, tool_name: "Bash", tool_input: {command: $command}}' |
+    (cd "$repository" && bash "$hooks_dir/pre-tool-use-policy.sh")
+}
+
+run_antigravity() {
+  jq -cn --arg command "$1" --arg message "${2:-}" \
+    '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
+    (cd "$repository" && bash "$hooks_dir/antigravity-pre-tool-use.sh")
 }
 
 antigravity_decision() {
-  jq -cn --arg command "$1" --arg message "${2:-}" \
-    '{toolCall: {args: {CommandLine: $command}}, lastUserInput: $message}' |
-    bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision
+  run_antigravity "$@" | jq -r .decision
+}
+
+allowed='0 '
+blocked_reason='Blocked: force push to main is not allowed.'
+
+# 同じコマンドは、どのエージェントの入力でも同じ判定になる。
+expect_both() {
+  local decision="$1" command="$2" expected="$allowed"
+  [ "$decision" = allow ] || expected="2 $blocked_reason"
+  expect "policy: $decision on $branch: $command" "$expected" "$(result_of run_policy "$command")"
+  expect "antigravity: $decision on $branch: $command" "$decision" "$(antigravity_decision "$command")"
 }
 
 force_push='git push --force origin main'
 
-expect 'policy blocks force push to main' 2 "$(policy_exit "command: $force_push")"
-expect 'policy blocks forced refspec to main' 2 "$(policy_exit 'command: git push origin +main')"
-expect 'policy allows push to another branch' 0 "$(policy_exit 'command: git push origin feature')"
+on_branch feature
+expect_both deny "$force_push"
+expect_both deny 'git push --force-with-lease origin main'
+expect_both deny 'git push -f origin main'
+expect_both deny 'git push -uf origin main'
+expect_both deny 'git push origin +main'
+expect_both deny 'git push -f origin HEAD:main'
+expect_both deny 'git push origin +feature:refs/heads/main'
+expect_both deny 'git fetch; git push -f origin main'
+expect_both deny $'git push \\\n  -f origin main'
+expect_both deny 'git -C app push -f origin "main" 2>&1 | tail -3'
+expect_both deny 'git --git-dir .git push -f origin main'
+expect_both deny 'git push -f 2>&1 origin main'
+expect_both deny 'git push -f origin feature:heads/main'
+expect_both allow 'git push -f origin feature > main'
+expect_both allow 'git push origin main'
+expect_both allow 'git push --follow-tags origin main'
+expect_both allow 'git push -f'
+expect_both allow 'git push -f origin'
+expect_both allow 'git push -f origin HEAD'
+expect_both allow 'git push -f origin feature'
+expect_both allow 'git push -f origin main:feature'
+expect_both allow 'git push -f main feature'
+expect_both allow 'echo main && git push -f origin feature'
+expect_both allow 'git commit -m "git push -f origin main"'
+expect 'policy ignores main in the working directory path' "$allowed" \
+  "$(result_of run_policy 'git push --force origin feature' /work/domain/repository)"
 
-expect 'antigravity denies force push to main' deny "$(antigravity_decision "$force_push")"
+on_branch main
+expect_both deny 'git push -f'
+expect_both deny 'git push --force origin'
+expect_both deny 'git push -f origin HEAD'
+expect_both deny 'git push -f origin 2>&1'
+expect_both deny 'git push -f origin > push.log'
+expect_both deny 'git push -f && echo done'
+expect_both deny 'git push -f -o ci.skip origin'
+expect_both allow 'git push'
+expect_both allow 'git push origin HEAD'
+expect_both allow 'git push -f origin feature'
+
+expect 'policy blocks when jq is missing' '2 Blocked: hook の実行に jq が必要です。' \
+  "$(printf '{}' | result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'policy blocks input that is not JSON' '2 Blocked: hook の入力を JSON として読めません。' \
+  "$(printf 'not json' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
+
+expect 'antigravity passes on the reason for a denial' \
+  "$(jq -cn --arg reason "$blocked_reason" '{decision: "deny", reason: $reason}')" \
+  "$(run_antigravity "$force_push")"
 expect 'antigravity allows an ordinary command' allow "$(antigravity_decision 'npm test')"
 expect 'antigravity ignores the user message' allow "$(antigravity_decision 'ls' "$force_push")"
 expect 'antigravity denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
@@ -60,9 +136,6 @@ for config in .claude/settings.json .codex/hooks.json .agents/hooks.json; do
   done
 done
 
-repository="$(mktemp -d)"
-trap 'rm -rf "$repository"' EXIT
-git -C "$repository" init -q
 printf 'resolved\n' > "$repository/file.txt"
 git -C "$repository" add file.txt
 expect 'stop-verify passes without conflict markers' 0 \

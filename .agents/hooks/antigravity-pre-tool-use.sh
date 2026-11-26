@@ -13,7 +13,8 @@ if ! command_line="$(jq -er '.toolCall.args.CommandLine | select(type == "string
   exit 0
 fi
 
-if reason="$(printf '%s' "$command_line" | bash "$hooks_dir/pre-tool-use-policy.sh" 2>&1 >/dev/null)"; then
+# 共通の判定は Claude Code / Codex の入力の形で読む。
+if reason="$(jq -cn --arg command "$command_line" '{tool_input: {command: $command}}' | bash "$hooks_dir/pre-tool-use-policy.sh" 2>&1 >/dev/null)"; then
   echo '{"decision":"allow"}'
 else
   jq -cn --arg reason "$reason" '{decision: "deny", reason: $reason}'

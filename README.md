@@ -56,7 +56,8 @@ pnpm install
 | **Antigravity** | `AGENTS.md` を直接読む | `.agents/skills/` を直接読む | `.agents/hooks.json` |
 
 - Codex の hook は、プロジェクトを信頼し、`/hooks` で各 hook を承認すると有効になります。
-- Antigravity の hook は `jq` が必要です。配線しているのはコマンド実行前の検査だけで、コンフリクトマーカーの検出は Claude Code と Codex で動きます。
+- コマンド実行前の hook は、どのエージェントでも `jq` が必要です。`jq` がないとコマンドの実行を止めます。
+- Antigravity に配線しているのはコマンド実行前の検査だけで、コンフリクトマーカーの検出は Claude Code と Codex で動きます。
 - Claude Code 固有の指示は `CLAUDE.md` の取り込み行の下に書きます。
 
 ### 必要なプラグイン
