@@ -35,8 +35,9 @@ is_force_push_to_main() {
         case "$word" in
           # git は長いオプションの省略形(--force-w など)も受け付ける。
           --force*|-f*|-[!-]*f*) force=1 ;;
-          # すべてのブランチを送るので、main も宛先に含まれる。
-          --all|--branches|--mirror) targets_main=1 ;;
+          # すべてのブランチを送るので、main も宛先に含まれる。--mirror は force なしでも上書きする。
+          --al*|--br*) targets_main=1 ;;
+          --mi*) force=1; targets_main=1 ;;
           -o|--push-option|--repo|--receive-pack|--exec) state=push_option_value ;;
           -*) ;;
           *)
