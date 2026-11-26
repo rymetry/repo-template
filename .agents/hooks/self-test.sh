@@ -116,6 +116,8 @@ for command in \
   'git -C "$(case x in (a) echo .;; esac)" push -f origin main' \
   'git push -f -o "$(case x in (a) echo x;; esac)" origin main' \
   'git push -f $((cd app); echo origin) main' \
+  'x=$(( "1" + 1 )); git push origin feature' \
+  'git push -f $((x\)) main' \
   'GIT PUSH -f "$(case x in (a) echo origin;; esac)" main'; do
   expect "policy: unresolved on $branch: $command" "2 $unresolved_reason" "$(result_of run_policy "$command")"
   expect "json decision: unresolved on $branch: $command" deny "$(json_decision "$command")"
@@ -124,6 +126,7 @@ expect_both allow 'echo "$(case x in (a) echo ok;; esac)"'
 expect_both deny 'echo $( (cd app && git push -f origin main) )'
 # 中に ( ) のない $(( )) は、中身がコマンドに見えても bash は算術式として読み、実行しない。
 expect_both allow 'x=$((x + 1)); git push origin feature'
+expect_both allow 'x=$(( $x * 2 / 3 % 4 )); y=$((a<b ? a : b)); git push origin feature'
 expect_both deny '/usr/libexec/git-core/git-push -f origin main'
 expect_both deny 'git-push -f origin main'
 expect_both deny 'git.exe push -f origin main'
