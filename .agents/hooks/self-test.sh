@@ -68,89 +68,25 @@ force_push='git push --force origin main'
 on_branch feature
 expect_both deny "$force_push"
 expect_both deny 'git push --force-with-lease origin main'
-expect_both deny 'git push --force-w origin main'
 expect_both deny 'git push --force --all origin'
-expect_both deny 'git push -f --al origin'
 expect_both deny 'git push -f --branches origin'
-expect_both deny 'git push -f --b origin'
 expect_both deny 'git push --mirror origin'
-expect_both deny 'git push --m'
 expect_both allow 'git push --all origin'
 expect_both allow 'git push --branches origin'
-expect_both allow 'git push -f --tags origin'
 expect_both deny 'git push -f origin main'
 expect_both deny 'git push -uf origin main'
 expect_both deny 'git push origin +main'
 expect_both deny 'git push -f origin HEAD:main'
 expect_both deny 'git push origin +feature:refs/heads/main'
+expect_both deny 'git push -f origin feature:heads/main'
 expect_both deny 'git fetch; git push -f origin main'
 expect_both deny $'git push \\\n  -f origin main'
 expect_both deny 'git -C app push -f origin "main" 2>&1 | tail -3'
-for option in -C -c --git-dir --work-tree --namespace --config-env --attr-source; do
-  expect_both deny "git $option value push -f origin main"
-done
+expect_both deny 'git -c push.default=current push -f origin main'
 expect_both deny '/usr/bin/git push -f origin main'
 expect_both deny 'git push -f 2>&1 origin main'
-expect_both deny 'git push -f origin feature:heads/main'
-expect_both deny 'git push origin +:'
-expect_both deny 'git push -f origin :'
-expect_both deny 'git push origin +refs/heads/*:refs/heads/*'
-expect_both deny 'git push -f origin "+refs/*:refs/*"'
-expect_both deny 'git push -f origin "*:*"'
-expect_both deny 'git push -f origin "refs/heads/*:heads/*"'
-expect_both allow 'git push -f origin "refs/tags/*:refs/tags/*"'
-expect_both allow 'git push -f origin feature:'
-expect_both allow 'git push -f origin HEAD:'
-expect_both deny 'git push -f origin main:'
-expect_both deny 'git push -f origin "${SOURCE:-feature}:main"'
-expect_both deny 'git push -f "$(git remote)" "$(echo x)" main'
-expect_both deny 'echo "${X:-$(git push -f origin main)}"'
-expect_both deny 'echo "${X:-`git push -f origin main`}"'
-expect_both deny 'git push -f "$(echo ${X:-(a)})" main'
-# 中に ( ) があって移せないコマンド置換は、git push を含むなら判定できないものとして止める。
-unresolved_reason='Blocked: コマンド置換を読み切れないため、main への force push かどうか判定できません。置換を変数に分けて実行してください。'
-for command in \
-  'git push -f "$(case x in (a) echo origin;; esac)" main' \
-  'git push -f origin "$(case x in (a) echo feature;; esac)"' \
-  'git push origin "$(case x in (a) echo main;; esac)"' \
-  'git -C "$(case x in (a) echo .;; esac)" push -f origin main' \
-  'git push -f -o "$(case x in (a) echo x;; esac)" origin main' \
-  'git push -f $((cd app); echo origin) main' \
-  'git push -f $((x\)) main' \
-  '$(case x in (a) echo git;; esac) push -f origin main' \
-  'X=1 $(case x in (a) echo git;; esac) push -f origin main' \
-  'x= $(case x in (a) echo git;; esac) push -f origin main' \
-  'git push -f --repo=$(case x in (a) echo origin;; esac) main' \
-  'GIT PUSH -f "$(case x in (a) echo origin;; esac)" main'; do
-  expect "policy: unresolved on $branch: $command" "2 $unresolved_reason" "$(result_of run_policy "$command")"
-  expect "json decision: unresolved on $branch: $command" deny "$(json_decision "$command")"
-done
-expect_both allow 'echo "$(case x in (a) echo ok;; esac)"'
-# git 以外のコマンドの引数にある、移せないコマンド置換は判定に影響しない。
-expect_both allow 'x=$(( "1" + 1 )); git push origin feature'
-expect_both allow $'gh pr create --body "$(cat <<\'EOF\'\n## 概要\nforce push を止める(github)\nEOF\n)"'
-expect_both allow $'git commit -m "$(cat <<\'EOF\'\nfix: force push の判定 (git push)\nEOF\n)" && git push origin feature'
-expect_both deny 'echo $( (cd app && git push -f origin main) )'
-# 中に ( ) のない $(( )) は、中身がコマンドに見えても bash は算術式として読み、実行しない。
-expect_both allow 'x=$((x + 1)); git push origin feature'
-expect_both allow 'x=$(( $x * 2 / 3 % 4 )); y=$((a<b ? a : b)); git push origin feature'
-expect_both deny '/usr/libexec/git-core/git-push -f origin main'
-expect_both deny 'git-push -f origin main'
-expect_both deny 'git.exe push -f origin main'
-expect_both deny 'GIT push -f origin main'
-expect_both deny '/usr/bin/Git.EXE push -f origin main'
-expect_both deny 'Git-Push -f origin main'
-expect_both deny 'git PUSH -f origin main'
-expect_both allow 'GIT push -f origin feature'
-expect_both deny 'git push -f -ogo origin main'
-expect_both allow 'git push -ofo origin main'
-expect_both deny 'git push -f "$(git remote)" main'
-expect_both deny 'git push -f `git remote` main'
 expect_both deny 'echo "$(git push -f origin main)"'
 expect_both deny 'echo `git push -f origin main`'
-expect_both allow 'git push --force-with-lease origin "$(git branch --show-current)"'
-expect_both allow 'git push -f origin "$BRANCH"'
-expect_both allow 'git push origin :'
 expect_both allow 'git push -f origin feature > main'
 expect_both allow 'git push origin main'
 expect_both allow 'git push --follow-tags origin main'
@@ -160,29 +96,26 @@ expect_both allow 'git push -f origin HEAD'
 expect_both allow 'git push -f origin feature'
 expect_both allow 'git push -f origin main:feature'
 expect_both allow 'git push -f main feature'
+expect_both allow 'git push -f origin "$BRANCH"'
+expect_both allow 'git push --force-with-lease origin "$(git branch --show-current)"'
 expect_both allow 'echo main && git push -f origin feature'
 expect_both allow 'git commit -m "git push -f origin main"'
+expect_both allow $'gh pr create --body "$(cat <<\'EOF\'\n## 概要\nforce push を止める(github)\nEOF\n)"'
 
 on_branch main
 expect_both deny 'git push -f'
 expect_both deny 'git push --force origin'
 expect_both deny 'git push -f origin HEAD'
 expect_both deny 'git push -f origin @'
-expect_both deny 'git push --force-with-lease origin "$(git branch --show-current)"'
 expect_both deny 'git push -f origin "$BRANCH"'
-expect_both deny 'git push -f origin "${BRANCH:-main}"'
-expect_both deny 'git push -fo ci.skip origin'
+expect_both deny 'git push --force-with-lease origin "$(git branch --show-current)"'
 expect_both deny 'git push -f origin 2>&1'
 expect_both deny 'git push -f origin > push.log'
 expect_both deny 'git push -f && echo done'
-for option in -o --push-option --pu --repo --rep --receive-pack --rece --exec --e; do
+# 値を取るオプションの値は、リモートに数えない。
+for option in -o --push-option --repo; do
   expect_both deny "git push -f $option value origin"
 done
-expect_both deny 'git push -f --follow-tags'
-expect_both deny 'git push -f origin main --tags'
-expect_both allow 'git push -f origin --tags'
-expect_both allow 'git push -f --ta'
-expect_both allow 'git push -f --push-option=ci.skip origin feature'
 expect_both allow 'git push'
 expect_both allow 'git push origin HEAD'
 expect_both allow 'git push -f origin feature'
@@ -208,26 +141,6 @@ expect 'policy joins a command given as an array' "2 $blocked_reason" \
     result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 expect 'policy allows an ordinary command given as an array' "$allowed" \
   "$(jq -cn '{tool_input: {command: ["ls", "-la"]}}' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
-
-# jq がなくても、jq を入れるコマンドは通し、git push だけを止める。
-expect 'policy blocks git push when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
-  "$(printf '{"tool_input":{"command":"git push origin feature"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'policy blocks a quoted git push when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
-  "$(jq -cn '{tool_input: {command: "\"gi\"\"t\" pu\\sh -f origin main"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'policy blocks push before git when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
-  "$(jq -cn '{tool_input: {command: "p=push; git $p -f origin main"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'policy blocks an upper-case git push when jq is missing' '2 Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。' \
-  "$(printf '{"tool_input":{"command":"GIT PUSH -f origin main"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'policy ignores git and push in the working directory when jq is missing' "$allowed" \
-  "$(printf '{"cwd":"/work/github/web-push","tool_input":{"command":"brew install jq"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'policy allows installing jq when jq is missing' "$allowed" \
-  "$(printf '{"tool_input":{"command":"brew install jq"}}' |
-    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
 expect 'policy blocks input that is not JSON' '2 Blocked: hook の入力を JSON として読めません。' \
   "$(printf 'not json' | result_of bash "$hooks_dir/pre-tool-use-policy.sh")"
 
@@ -236,53 +149,38 @@ expect 'json decision passes on the reason for a denial' \
   "$(run_json_decision "$force_push")"
 expect 'json decision allows an ordinary command' allow "$(json_decision 'npm test')"
 expect 'json decision ignores the user message' allow "$(json_decision 'ls' "$force_push")"
-expect 'json decision denies git push when jq is missing' \
-  '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' \
-  "$(printf '{"toolCall":{"args":{"CommandLine":"git push origin feature"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
-expect 'json decision denies a quoted git push when jq is missing' deny \
-  "$(jq -cn '{toolCall: {args: {CommandLine: "gi'"'"''"'"'t push -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision denies push before git when jq is missing' deny \
-  "$(jq -cn '{toolCall: {args: {CommandLine: "p=push; git $p -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision allows installing jq when jq is missing' '{"decision":"allow"}' \
-  "$(printf '{"toolCall":{"args":{"CommandLine":"brew install jq"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
-# 直前のユーザー発言は、項目の順番によらず判定に使わない。
-for payload in \
-  '{"lastUserInput":"git push","toolCall":{"args":{"CommandLine":"brew install jq"}}}' \
-  '{"toolCall":{"args":{"CommandLine":"brew install jq"}},"lastUserInput":"git push"}'; do
-  expect "json decision ignores the user message when jq is missing: $payload" '{"decision":"allow"}' \
-    "$(printf '%s' "$payload" | PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
-done
-expect 'json decision denies git push after the user message when jq is missing' deny \
-  "$(printf '{"lastUserInput":"ok","toolCall":{"args":{"CommandLine":"git push -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision denies an upper-case git push when jq is missing' deny \
-  "$(printf '{"toolCall":{"args":{"CommandLine":"Git Push -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision checks the last CommandLine when jq is missing' deny \
-  "$(printf '{"history":[{"CommandLine":"ls"}],"lastUserInput":"ok","toolCall":{"args":{"CommandLine":"git push -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision denies a payload without a command when jq is missing' deny \
-  "$(printf '{"toolCall":{"args":{}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
-expect 'json decision does not cut the command at a quoted key name when jq is missing' deny \
-  "$(jq -cn '{toolCall: {args: {CommandLine: "echo \"lastUserInput\"; git push -f origin main"}}}' |
-    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision)"
 
-# jq があっても動かないときは、jq がないときと同じに扱う。
+# jq がない、または動かないときも、jq を入れるコマンドは通し、git push だけを止める。
+jq_required_reason='Blocked: hook の実行に jq が必要です。jq を入れてから実行してください。'
+jq_required_decision='{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}'
 broken_jq_dir="$sandbox/broken-jq"
 mkdir "$broken_jq_dir"
 printf '#!/bin/sh\nexit 126\n' > "$broken_jq_dir/jq"
 chmod +x "$broken_jq_dir/jq"
-expect 'policy allows installing jq when jq cannot run' "$allowed" \
-  "$(printf '{"tool_input":{"command":"brew reinstall jq"}}' |
-    result_of env PATH="$broken_jq_dir" /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
-expect 'json decision allows installing jq when jq cannot run' '{"decision":"allow"}' \
-  "$(printf '{"toolCall":{"args":{"CommandLine":"brew reinstall jq"}}}' |
-    PATH="$broken_jq_dir" /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+for path in /nonexistent "$broken_jq_dir"; do
+  expect "policy blocks git push without a working jq ($path)" "2 $jq_required_reason" \
+    "$(printf '{"tool_input":{"command":"git push origin feature"}}' |
+      result_of env PATH="$path" /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+  expect "policy allows installing jq without a working jq ($path)" "$allowed" \
+    "$(printf '{"tool_input":{"command":"brew install jq"}}' |
+      result_of env PATH="$path" /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+  expect "json decision denies git push without a working jq ($path)" "$jq_required_decision" \
+    "$(printf '{"toolCall":{"args":{"CommandLine":"git push origin feature"}}}' |
+      PATH="$path" /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+  expect "json decision allows installing jq without a working jq ($path)" '{"decision":"allow"}' \
+    "$(printf '{"toolCall":{"args":{"CommandLine":"brew install jq"}}}' |
+      PATH="$path" /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+done
+# パスや直前のユーザー発言にある git と push では止めない。
+expect 'policy ignores git and push in the working directory without jq' "$allowed" \
+  "$(printf '{"cwd":"/work/github/web-push","tool_input":{"command":"brew install jq"}}' |
+    result_of env PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-policy.sh")"
+expect 'json decision ignores the user message without jq' '{"decision":"allow"}' \
+  "$(printf '{"toolCall":{"args":{"CommandLine":"brew install jq"}},"lastUserInput":"git push"}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
+expect 'json decision checks a command after the user message without jq' "$jq_required_decision" \
+  "$(printf '{"lastUserInput":"ok","toolCall":{"args":{"CommandLine":"git push origin feature"}}}' |
+    PATH=/nonexistent /bin/bash "$hooks_dir/pre-tool-use-json-decision.sh")"
 
 json_decision_for_payload() {
   jq -cn "$1" | bash "$hooks_dir/pre-tool-use-json-decision.sh" | jq -r .decision

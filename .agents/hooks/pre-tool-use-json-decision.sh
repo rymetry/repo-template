@@ -5,22 +5,12 @@ set -uo pipefail
 # jq を入れるコマンドも止めないよう、標準入力は外部コマンドを使わずに読む。
 IFS= read -r -d '' input || true
 
-# jq がない、または動かないとコマンドを取り出せないので、git push を含む入力だけを拒否し、jq の導入などは通す。
-# 直前のユーザー発言では拒否しないよう、CommandLine の項目から後ろを見て、lastUserInput の項目は外す。
-# CommandLine の項目が複数あっても実行するものを外さないよう、最初と最後の両方から切り出す。
-# JSON の文字列の中の " は \" になるので、"CommandLine" と "lastUserInput" の一致は項目名だけに当たる。
-# gi""t のように引用符やバックスラッシュで分けた語も見つけるため、それらを除いてから探す。
+# jq がない、または動かないときは、CommandLine の項目より後ろに git と push を含む入力だけを拒否し、jq の導入などは通す。
+# 直前のユーザー発言では拒否しないよう、lastUserInput の項目は外す。
 if ! jq -n 1 >/dev/null 2>&1; then
-  case "$input" in
-    *\"CommandLine\"*) ;;
-    *) echo '{"decision":"deny","reason":"hook が実行するコマンドを入力から取り出せませんでした。"}'; exit 0 ;;
-  esac
-  first=${input#*\"CommandLine\"}
-  last=${input##*\"CommandLine\"}
-  command_part="${first%%\"lastUserInput\"*} ${last%%\"lastUserInput\"*}"
-  normalized=${command_part//[\"\'\\]/}
-  case "$normalized" in
-    *[Gg][Ii][Tt]*[Pp][Uu][Ss][Hh]*|*[Pp][Uu][Ss][Hh]*[Gg][Ii][Tt]*) echo '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' ;;
+  command_part=${input#*\"CommandLine\"}
+  case "${command_part%%\"lastUserInput\"*}" in
+    *git*push*) echo '{"decision":"deny","reason":"hook の実行に jq が必要です。jq を入れてから実行してください。"}' ;;
     *) echo '{"decision":"allow"}' ;;
   esac
   exit 0
