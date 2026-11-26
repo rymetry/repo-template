@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  # @mizchi/mutator の更新では、.agents/skills/ の写しが更新 PR の中で自動で直る(マージは手動)。
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly

@@ -83,7 +83,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Actions permissions
+# 4. Secret scanning
+# ---------------------------------------------------------------------------
+echo ""
+echo "🔑 Enabling secret scanning..."
+
+if gh api --silent -X PATCH "repos/$REPO" \
+  --input - <<'SCANNING'; then
+{
+  "security_and_analysis": {
+    "secret_scanning": { "status": "enabled" },
+    "secret_scanning_push_protection": { "status": "enabled" }
+  }
+}
+SCANNING
+  echo "  Secret scanning: ON"
+  echo "  Push protection: ON"
+else
+  echo "  ⚠️  Secret scanning の設定に失敗しました（上のエラーを確認してください。プランによっては利用できません）"
+  echo "      利用できる場合は Settings > Security から有効化してください"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Actions permissions
 # ---------------------------------------------------------------------------
 echo ""
 echo "🔐 Configuring Actions permissions..."
@@ -102,7 +124,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Branch protection (main)
+# 6. Branch protection (main)
 # ---------------------------------------------------------------------------
 echo ""
 echo "🛡️  Setting up branch protection for main..."
@@ -115,12 +137,16 @@ if gh api -X PUT "repos/$REPO/branches/main/protection" \
   },
   "enforce_admins": false,
   "restrictions": null,
-  "required_status_checks": null,
+  "required_status_checks": {
+    "strict": false,
+    "contexts": ["check"]
+  },
   "allow_force_pushes": false,
   "allow_deletions": false
 }
 PROTECTION
   echo "  PR required: ON (0 approvals, self-merge OK)"
+  echo "  Required check: check (.github/workflows/ci.yml)"
   echo "  Admin bypass: ON"
   echo "  Force push: BLOCKED"
   echo "  Branch deletion: BLOCKED"
@@ -129,7 +155,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. コミット & 完了
+# 7. コミット & 完了
 # ---------------------------------------------------------------------------
 echo ""
 echo "📦 Committing placeholder replacements..."
@@ -149,7 +175,6 @@ echo "  ✅ Setup complete!"
 echo "========================================="
 echo ""
 echo "Next steps:"
-echo "  1. README.md をプロジェクト固有の内容に書き換える"
-echo "  2. Settings > Security で Secret scanning を有効化する（UI のみ）"
-echo "  3. Settings > Security で Private vulnerability reporting を有効化する（UI のみ）"
+echo "  1. README.md と AGENTS.md をプロジェクト固有の内容に書き換える"
+echo "  2. Settings > Security で Private vulnerability reporting を有効化する（UI のみ）"
 echo ""

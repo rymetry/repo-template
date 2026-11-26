@@ -33,3 +33,12 @@ yarn-error.log*
 # Coverage
 coverage/
 .nyc_output/
+
+# Mutation testing
+.mutator/
+
+# AI agent local state
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+AGENTS.override.md
