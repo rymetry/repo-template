@@ -4,11 +4,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
-  # エージェントのスキルを同梱するパッケージだけを更新する。.agents/skills/ の写しは更新 PR の中で自動で直る。
-  # ほかの依存も更新させるときは allow を外す。
+  # @mizchi/mutator の更新では、.agents/skills/ の写しが更新 PR の中で自動で直る(マージは手動)。
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: monthly
-    allow:
-      - dependency-name: "@mizchi/mutator"

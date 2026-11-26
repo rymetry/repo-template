@@ -82,12 +82,12 @@ pnpm install
 `mutator` と `mutation-test-loop` は、パッケージに同梱されたスキルの写しです。
 
 1. Dependabot が月次で `@mizchi/mutator` の更新 PR を出します。
-2. `dependabot-auto-merge.yml` が、PR ブランチ上で写しを直してコミットします。
-3. patch / minor はそのまま自動でマージされます。major は手動でマージします。
-4. CI が、写しとインストール済みパッケージのずれを検査します。
+2. `dependabot-auto-merge.yml` が、PR ブランチ上で写しとライセンスを直してコミットします。
+3. スキル(エージェントへの指示)の差分を確認し、手動でマージします。この更新は、patch / minor でも自動マージの対象外です。
+4. マージ後の `main` の CI が、写しとインストール済みパッケージのずれを検査します。
 
-- patch / minor では、スキル(エージェントへの指示)の変更が確認なしで `main` に入ります。確認してからマージしたい場合は、`dependabot-auto-merge.yml` の承認とマージの手順が `@mizchi/mutator` の更新では動かないよう、条件を足してください。
-- 写しを直したコミットでは PR の CI が走りません(ワークフローのトークンによる push は CI を起動しないため)。ずれの検査は、マージ後の `main` の CI で行われます。ブランチ保護で必須チェックを設定する場合は注意してください。
+- 写しを直したコミットには、PR の CI の結果が付きません(ワークフローのトークンによる push は CI を起動しないため)。Dependabot の元のコミットでは写しの検査が失敗しますが、写しを直したコミットが続いていれば問題ありません。
+- ブランチ保護で必須チェックを設定すると、この PR はチェックが付かずマージできません。その場合は、手元で空のコミットを push するなどして CI を起動してください。
 - 手元で直すときは `bash .github/scripts/sync-skills.sh` を実行します。
 
 ### JS / TS 以外のプロジェクトで外すもの
@@ -99,7 +99,7 @@ mutator は Node.js 24 以上と、Vitest・Jest・Bun のいずれかのテス�
 - `.github/scripts/sync-skills.sh`
 - `.github/dependabot.yml` の npm の設定
 - `.github/workflows/ci.yml` の pnpm 以降の手順
-- `.github/workflows/dependabot-auto-merge.yml` の写しを直す 5 つの手順
+- `.github/workflows/dependabot-auto-merge.yml` の写しを直す 5 つの手順と、承認・マージの条件のうち `@mizchi/mutator` の部分
 - `AGENTS.md` の `mutator`・`mutation-test-loop` への言及
 
 ## 含まれるファイル
@@ -128,7 +128,7 @@ CLAUDE.md                              # AGENTS.md の取り込み + Claude Code
   workflows/
     ci.yml                             # hook の自己検査、スキルの写しの検査
     dependabot-auto-merge.yml          # Dependabot patch/minor 自動マージ、スキルの写し直し
-  dependabot.yml                       # Actions と mutator の更新
+  dependabot.yml                       # Actions と npm の更新
   ISSUE_TEMPLATE/
     bug_report.yml                     # バグ報告テンプレート
     feature_request.yml                # 機能リクエストテンプレート

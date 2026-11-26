@@ -38,6 +38,28 @@ expect 'antigravity ignores the user message' allow "$(antigravity_decision 'ls'
 expect 'antigravity denies when jq is missing' '{"decision":"deny","reason":"hook の実行に jq が必要です。"}' \
   "$(printf '{}' | PATH=/nonexistent /bin/bash "$hooks_dir/antigravity-pre-tool-use.sh")"
 
+antigravity_decision_for_payload() {
+  jq -cn "$1" | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision
+}
+
+expect 'antigravity denies a payload without a command' deny "$(antigravity_decision_for_payload '{}')"
+expect 'antigravity denies a renamed command field' deny \
+  "$(antigravity_decision_for_payload '{toolCall: {args: {commandLine: "ls"}}}')"
+expect 'antigravity denies an empty command' deny \
+  "$(antigravity_decision_for_payload '{toolCall: {args: {CommandLine: ""}}}')"
+expect 'antigravity denies input that is not JSON' deny \
+  "$(printf 'not json' | bash "$hooks_dir/antigravity-pre-tool-use.sh" | jq -r .decision)"
+
+# 設定ファイルが指す hook が存在しないと、エージェントは何も知らせずに hook を無効にする。
+repository_root="$(cd "$hooks_dir/../.." && pwd)"
+for config in .claude/settings.json .codex/hooks.json .agents/hooks.json; do
+  referenced_scripts="$(grep -o '\.agents/hooks/[a-z-]*\.sh' "$repository_root/$config" | sort -u)"
+  expect "$config refers to a hook script" yes "$([ -n "$referenced_scripts" ] && echo yes || echo no)"
+  for script in $referenced_scripts; do
+    expect "$config: $script exists" yes "$([ -f "$repository_root/$script" ] && echo yes || echo no)"
+  done
+done
+
 repository="$(mktemp -d)"
 trap 'rm -rf "$repository"' EXIT
 git -C "$repository" init -q

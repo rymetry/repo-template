@@ -18,7 +18,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # スキルを同梱するパッケージの更新では、マージの前に .agents/skills/ の写しを PR ブランチ上で直す。
+      # スキルを同梱するパッケージの更新では、.agents/skills/ の写しを PR ブランチ上で直す。
       - name: Checkout PR branch
         if: contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,15 +60,16 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # スキル(エージェントへの指示)を変える更新は、写しの差分を人が確認してからマージする。
       - name: Approve PR
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && !contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
         run: gh pr review "$PR_URL" --approve
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable auto-merge
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && !contains(steps.metadata.outputs.dependency-names, '@mizchi/mutator')
         run: gh pr merge "$PR_URL" --auto --squash
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
